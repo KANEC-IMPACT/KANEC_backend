@@ -20,3 +20,5 @@ class Project(BaseModel):
 
     # relationships
     creator = relationship("User", back_populates="projects")
+    donations = relationship("Donation", back_populates="project", cascade="all, delete-orphan")
+
