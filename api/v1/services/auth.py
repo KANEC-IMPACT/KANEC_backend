@@ -1,31 +1,120 @@
-from api.core.base.services import Service
-from api.db.database import get_db
-from api.v1.models.user import User
-from api.v1.schemas.user import TokenData
-from api.v1.services.user import user_service
-from api.utils.settings import settings
-from fastapi import HTTPException, Depends
-from fastapi.security import OAuth2PasswordBearer
+# api/v1/services/auth.py
+
+from datetime import datetime, timedelta
+from typing import Optional
 from sqlalchemy.orm import Session
-from typing import Tuple
-import jwt
+from jose import jwt
+from passlib.context import CryptContext
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
+from api.v1.models.user import User
+from api.utils.settings import settings
+from api.v1.schemas.user import UserCreate, Login
 
-class AuthService(Service):
-    """Auth Service"""
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-    @staticmethod
-    def verify_magic_token(magic_token: str, db: Session) -> Tuple[User, str]:
-        """Function to verify magic token"""
-
-        credentials_exception = HTTPException(
-            status_code=401,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-        token = user_service.verify_access_token(magic_token, credentials_exception)
-        user = db.query(User).filter(User.id == token.id).first()
+async def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
+    """
+    Create a JWT access token for the user.
+    
+    Args:
+        data: Dictionary containing user data (e.g., email as subject)
+        expires_delta: Optional expiration time delta
         
-        return user, magic_token
+    Returns:
+        str: Encoded JWT token
+    """
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.utcnow() + expires_delta
+    else:
+        expire = datetime.utcnow() + timedelta(minutes=15)
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+async def register_user(db: Session, user_data: UserCreate) -> dict:
+    """
+    Register a new user in the database.
+    
+    Args:
+        db: SQLAlchemy database session
+        user_data: Pydantic schema with user registration data
+        
+    Returns:
+        dict: Response with user details
+        
+    Raises:
+        ValueError: If email is already registered
+    """
+    # Check if email already exists
+    existing_user = db.query(User).filter(User.email == user_data.email).first()
+    if existing_user:
+        raise ValueError("Email already registered")
+
+    # Hash the password
+    hashed_password = pwd_context.hash(user_data.password)
+
+    # Create new user instance
+    new_user = User(
+        name=user_data.name,
+        email=user_data.email,
+        password=hashed_password,
+        role=user_data.role,
+        walletAddress=user_data.walletAddress,
+        createdAt=datetime.utcnow()
+    )
+
+    # Add to database
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    # Return user details without sensitive data
+    return {
+        "message": "User registered successfully",
+        "user": {
+            "id": new_user.id,
+            "name": new_user.name,
+            "email": new_user.email,
+            "role": new_user.role,
+            "walletAddress": new_user.walletAddress,
+            "createdAt": new_user.createdAt
+        }
+    }
+
+async def login_user(db: Session, login_data: Login) -> dict:
+    """
+    Authenticate a user and generate a JWT token.
+    
+    Args:
+        db: SQLAlchemy database session
+        login_data: Pydantic schema with login credentials
+        
+    Returns:
+        dict: Response with JWT access token
+        
+    Raises:
+        ValueError: If credentials are invalid
+    """
+    # Fetch user by email
+    user = db.query(User).filter(User.email == login_data.email).first()
+    if not user:
+        raise ValueError("Invalid credentials")
+
+    # Ensure user.password is a string
+    hashed_password = str(user.password)  # Explicitly convert to string
+    if not hashed_password:
+        raise ValueError("Invalid credentials: Password not found")
+
+    # Verify password
+    if not pwd_context.verify(login_data.password, hashed_password):
+        raise ValueError("Invalid credentials")
+
+    # Generate JWT access token
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = await create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
+
+    return {"access_token": access_token, "token_type": "bearer"}
