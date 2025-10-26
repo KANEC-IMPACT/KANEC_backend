@@ -1,115 +1,248 @@
-# FASTAPI
-FastAPI boilerplate
+=======
+# Kanec API
 
-## Setup
+A FastAPI-based donation platform that enables cryptocurrency donations using Hedera HBAR tokens. The platform allows organizations to create donation projects, users to make donations, and provides transparent transaction tracking through Hedera's distributed ledger.
 
-1. Create a virtual environment.
- ```sh
-    python3 -m venv .venv
- ```
-2. Activate virtual environment.
-```sh
-    source /path/to/venv/bin/activate`
-```
-3. Install project dependencies `pip install -r requirements.txt`
-4. Create a .env file by copying the .env.sample file
-`cp .env.sample .env`
+## Features
 
-5. Start server.
- ```sh
- python main.py
-```
+- **User Management**: Role-based authentication (Donor, Admin, Organization)
+- **Project Management**: Create and manage donation projects with HBAR targets
+- **HBAR Donations**: Secure cryptocurrency donations via Hedera network
+- **Wallet Integration**: Automatic Hedera wallet creation for projects
+- **Transaction Tracing**: Verify and track donation transactions on Hedera
+- **Organization Support**: Organization accounts for managing multiple projects
+- **PostgreSQL Database**: Robust data storage with SQLAlchemy ORM
+- **Docker Support**: Containerized deployment with Docker Compose
 
-## **DATABASE TEST SETUP**
+## Technology Stack
 
-To set up the database, follow the following steps:
+- **Backend**: FastAPI (Python 3.12)
+- **Database**: PostgreSQL with SQLAlchemy ORM
+- **Blockchain**: Hedera SDK for HBAR transactions
+- **Migration**: Alembic for database schema management
+- **Authentication**: JWT tokens with role-based access control
+- **Containerization**: Docker & Docker Compose
 
-**Cloning**
-- clone the repository using `git clone https://github.com/hngprojects/hng_boilerplate_python_fastapi_web`
-- `cd` into the directory hng_boilerplate_python_fastapi_web
-- switch branch using `git checkout backend`
+## Quick Start
 
-**Environment Setup**
-- run `pip install -r requrements.txt` to install dependencies
-- create a `.env` file in the root directory and copy the content of `.env.sample` and update it accordingly
+### Prerequisites
 
-**Create your local database**
+- Python 3.12+
+- Docker and Docker Compose
+- PostgreSQL (or use Docker container)
+
+### Environment Setup
+
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/codenamemomi/KANEC_backend
+   cd KANEC_backend
+   ```
+
+2. **Create virtual environment**
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   ```
+
+3. **Install dependencies**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+4. **Environment Configuration**
+   ```bash
+   cp .env.sample .env
+   ```
+
+   Configure the following in your `.env` file:
+   ```env
+   # Database Configuration
+   DB_HOST=localhost
+   DB_PORT=5432
+   DB_USER=your_db_user
+   DB_PASSWORD=your_db_password
+   DB_NAME=kanec_db
+
+   # JWT Configuration
+   SECRET_KEY=your-secret-key-here
+   ALGORITHM=HS256
+   ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+   # Hedera Configuration
+   HEDERA_NETWORK=testnet
+   HEDERA_OPERATOR_ID=your-hedera-account-id
+   HEDERA_OPERATOR_KEY=your-hedera-private-key
+
+   # CORS Origins
+   BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+   ```
+
+### Database Setup
+
+1. **Create PostgreSQL database**
+   ```sql
+   CREATE USER kanec_user WITH PASSWORD 'your_password';
+   CREATE DATABASE kanec_db;
+   GRANT ALL PRIVILEGES ON DATABASE kanec_db TO kanec_user;
+   ```
+
+2. **Run database migrations**
+   ```bash
+   alembic upgrade head
+   ```
+
+3. **Seed the database (optional)**
+   ```bash
+   python scripts/seed.py
+   ```
+
+### Running the Application
+
+#### Development Mode
 ```bash
-sudo -u root psql
+python main.py
 ```
-```sql
-CREATE USER user WITH PASSWORD 'your desired password'; 
-CREATE DATABASE hng_fast_api;
-GRANT ALL PRIVILEGES ON DATABASE hng_fast_api TO user;
-```
+The API will be available at `http://localhost:8000`
 
-**Starting the database**
-after cloning the database, dont run 
-`alembic revision --autogenerate -m 'initial migration'`
-but run
-`alembic upgrade head`
-
-if you make changes to any table locally, then run the below command.
+#### Using Docker Compose
 ```bash
-alembic revision --autogenerate -m 'initial migration'
+docker-compose up --build
+```
+The API will be available at `http://localhost:7006`
+
+#### Using Docker (Production)
+```bash
+docker build -t kanec-api .
+docker run -p 7001:7001 --env-file .env kanec-api
+```
+
+## API Documentation
+
+Once the server is running, visit:
+- **Swagger UI**: `http://localhost:8000/docs`
+- **ReDoc**: `http://localhost:8000/redoc`
+- **Health Check**: `http://localhost:8000/` (returns `{"status": "ok"}`)
+
+## API Endpoints
+
+### Authentication
+- `POST /api/v1/auth/register` - Register new user
+- `POST /api/v1/auth/login` - User login (OAuth2 password flow)
+
+### Projects
+- `POST /api/v1/projects/` - Create project (admin/org only)
+- `GET /api/v1/projects/` - Get all verified projects
+- `GET /api/v1/projects/{project_id}` - Get project details
+- `GET /api/v1/projects/{project_id}/transparency` - Get project transparency data
+- `PATCH /api/v1/projects/{project_id}/verify` - Verify project (admin only)
+
+### Donations
+- `POST /api/v1/donations/` - Make HBAR donation
+
+### Transaction Tracing
+- `GET /api/v1/trace/trace/{tx_hash}` - Trace donation transaction
+
+## User Roles
+
+- **Donor**: Can view projects and make donations
+- **Organization (Org)**: Can create and manage projects
+- **Admin**: Full access including project verification
+
+## Hedera Integration
+
+The platform integrates with Hedera network for:
+- **Wallet Creation**: Automatic Hedera account creation for new projects
+- **HBAR Transfers**: Secure donation processing
+- **Transaction Verification**: Mirror node integration for transaction validation
+- **Transaction Tracing**: Complete donation history tracking
+
+### Hedera Configuration
+
+Ensure your `.env` file includes valid Hedera credentials:
+- `HEDERA_NETWORK`: `testnet` or `mainnet`
+- `HEDERA_OPERATOR_ID`: Your Hedera account ID
+- `HEDERA_OPERATOR_KEY`: Your Hedera private key
+
+## Database Models
+
+### User
+- Basic user information
+- Role-based permissions (donor/admin/org)
+- Wallet address for donations
+
+### Project
+- Project details and fundraising goals
+- HBAR wallet address
+- Verification status
+- Amount raised tracking
+
+### Donation
+- Donation records with transaction hashes
+- Status tracking (pending/completed/failed)
+- Links to donor and project
+
+### Organization
+- Organization management
+- Contact information
+- Verification status
+
+## Testing
+
+Run the test suite:
+```bash
+pytest
+```
+
+Run specific test files:
+```bash
+python -m unittest tests/v1/auth/test_login.py
+```
+
+## Database Migrations
+
+### Create new migration
+```bash
+alembic revision --autogenerate -m "migration description"
+```
+
+### Apply migrations
+```bash
 alembic upgrade head
 ```
 
-**create dummy data**
+### Downgrade
 ```bash
-python3 seed.py
+alembic downgrade -1
 ```
 
+## Deployment
 
-**Adding tables and columns to models**
-
-After creating new tables, or adding new models. Make sure to run alembic revision --autogenerate -m "Migration messge"
-
-After creating new tables, or adding new models. Make sure you import the new model properly in th 'api/v1/models/__init__.py file
-
-After importing it in the init file, you need not import it in the /alembic/env.py file anymore
-
-
-**Adding new routes**
-
-To add a new route, confirm if a file relating to that route is not already created. If it is add the route in that file using the already declared router
-
-If the there is no file relating to the route in the 'api/v1/routes/' directory create a new one following the naming convention
-
-After creating the new route file, declare the router and add the prefix as well as the tag
-
-The prefix should not include the base prefix ('/api/v1') as it is already includedin the base `api_version_one` router
-
-After creating the router, import it in the 'api/v1/routes/__init__.py' file and include the router in the `api_version_one` router using
-```python
-api_version_one.include_router(<router_name>)
+### Production Docker Setup
+```bash
+docker-compose -f docker-compose.prod.yml up --build
 ```
 
-## TEST THE ENDPOINT
-- run the following code
-```
-python -m unittest tests/v1/test_login.py
-python -m unittest tests/v1/test_signup.py
-```
+### Environment Variables for Production
+Ensure all required environment variables are set in your production environment, including:
+- Database credentials
+- Hedera network configuration
+- JWT secret keys
+- CORS origins
 
-## Issues
-if you encounter the following Error, when you run the code below
+## Contributing
 
-**alembic revision --autogenerate -m 'your migration message'**
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests for new features
+5. Ensure all tests pass
+6. Submit a pull request
 
-```
-INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
-INFO  [alembic.runtime.migration] Will assume transactional DDL.
-ERROR [alembic.util.messaging] Target database is not up to date.
-  FAILED: Target database is not up to date.
-```
+## License
 
-## Solutions
-Run the following code below first to update the datebase
-**alembic upgrade head**
-then, run this again.
-**alembic revision --autogenerate -m 'your migration message'**
+This project is licensed under the terms specified in the LICENSE file.
 
-## update 
-please make sure to test your endpoint or model before pushing.
-push your alembic migrations.
+## Support
+
+For support and questions, please open an issue on the GitHub repository.
