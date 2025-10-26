@@ -1,28 +1,25 @@
 # api/v1/services/auth.py
-
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
-from jose import jwt
-from passlib.context import CryptContext
-
+from jose import jwt, JWTError
+from fastapi import Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from api.v1.models.user import User
 from api.utils.settings import settings
-from api.v1.schemas.user import UserCreate, Login
+from api.v1.schemas.user import UserCreate, Login, UserResponse
+from api.db.database import get_db
+from passlib.context import CryptContext
 
 # Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# OAuth2 scheme for JWT
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+
 async def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
     Create a JWT access token for the user.
-    
-    Args:
-        data: Dictionary containing user data (e.g., email as subject)
-        expires_delta: Optional expiration time delta
-        
-    Returns:
-        str: Encoded JWT token
     """
     to_encode = data.copy()
     if expires_delta:
@@ -33,88 +30,93 @@ async def create_access_token(data: dict, expires_delta: Optional[timedelta] = N
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
+async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)) -> User:
+    """
+    Get the current authenticated user from JWT token.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        email: str = payload.get("sub")
+        if email is None:
+            raise credentials_exception
+    except JWTError:
+        raise credentials_exception
+    
+    user = db.query(User).filter(User.email == email).first()
+    if user is None:
+        raise credentials_exception
+    return user
+
 async def register_user(db: Session, user_data: UserCreate) -> dict:
     """
     Register a new user in the database.
-    
-    Args:
-        db: SQLAlchemy database session
-        user_data: Pydantic schema with user registration data
-        
-    Returns:
-        dict: Response with user details
-        
-    Raises:
-        ValueError: If email is already registered
     """
-    # Check if email already exists
-    existing_user = db.query(User).filter(User.email == user_data.email).first()
-    if existing_user:
+    if db.query(User).filter(User.email == user_data.email).first():
         raise ValueError("Email already registered")
+    if user_data.wallet_address and db.query(User).filter(User.wallet_address == user_data.wallet_address).first():
+        raise ValueError("Wallet address already registered")
 
-    # Hash the password
     hashed_password = pwd_context.hash(user_data.password)
-
-    # Create new user instance
     new_user = User(
         name=user_data.name,
         email=user_data.email,
         password=hashed_password,
         role=user_data.role,
-        walletAddress=user_data.walletAddress,
-        createdAt=datetime.utcnow()
+        wallet_address=user_data.wallet_address,
+        created_at=datetime.utcnow(),
+        updated_at=datetime.utcnow()
     )
-
-    # Add to database
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Return user details without sensitive data
     return {
         "message": "User registered successfully",
-        "user": {
-            "id": new_user.id,
-            "name": new_user.name,
-            "email": new_user.email,
-            "role": new_user.role,
-            "walletAddress": new_user.walletAddress,
-            "createdAt": new_user.createdAt
-        }
+        "user": UserResponse.from_orm(new_user)
     }
 
-async def login_user(db: Session, login_data: Login) -> dict:
+# async def login_user(db: Session, login_data: Login) -> dict:
+#     """
+#     Authenticate a user and generate a JWT token.
+#     """
+#     user = db.query(User).filter(User.email == login_data.email).first()
+#     if not user:
+#         raise ValueError("Invalid credentials")
+
+#     hashed_password = str(user.password)
+#     if not hashed_password or not pwd_context.verify(login_data.password, hashed_password):
+#         raise ValueError("Invalid credentials")
+
+#     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+#     access_token = await create_access_token(
+#         data={"sub": user.email}, expires_delta=access_token_expires
+#     )
+#     return {
+#         "access_token": access_token,
+#         "token_type": "bearer",
+#         "user": UserResponse.from_orm(user)
+#     }
+
+async def login_user(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
     """
-    Authenticate a user and generate a JWT token.
-    
-    Args:
-        db: SQLAlchemy database session
-        login_data: Pydantic schema with login credentials
-        
-    Returns:
-        dict: Response with JWT access token
-        
-    Raises:
-        ValueError: If credentials are invalid
+    Authenticate a user and generate a JWT token for OAuth2 password flow.
     """
-    # Fetch user by email
-    user = db.query(User).filter(User.email == login_data.email).first()
-    if not user:
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.password):
         raise ValueError("Invalid credentials")
 
-    # Ensure user.password is a string
-    hashed_password = str(user.password)  # Explicitly convert to string
-    if not hashed_password:
-        raise ValueError("Invalid credentials: Password not found")
-
-    # Verify password
-    if not pwd_context.verify(login_data.password, hashed_password):
-        raise ValueError("Invalid credentials")
-
-    # Generate JWT access token
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
 
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.from_orm(user)
+    }

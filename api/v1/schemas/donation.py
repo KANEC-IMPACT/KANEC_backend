@@ -1,0 +1,25 @@
+# api/v1/schemas/donation.py
+from pydantic import BaseModel
+from datetime import datetime
+from uuid import UUID
+from api.v1.models.donation import DonationStatus
+from typing import Optional
+
+class DonationCreate(BaseModel):
+    project_id: UUID
+    amount: float
+    donor_wallet: str
+    donor_private_key: str 
+
+class DonationResponse(BaseModel):
+    id: UUID
+    project_id: UUID
+    donor_id: UUID
+    amount: float
+    tx_hash: str
+    status: DonationStatus
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True

@@ -15,6 +15,7 @@ class Project(BaseModel):
     amount_raised = Column(Float, default=0.0)
     location = Column(String(255), nullable=True)
     verified = Column(Boolean, default=False)
+    wallet_address = Column(String(255), nullable=False)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 

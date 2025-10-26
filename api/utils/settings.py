@@ -40,6 +40,10 @@ class Settings(BaseSettings):
 
     CELERY_BROKER_URL: Optional[str] = None
     CELERY_RESULT_BACKEND: Optional[str] = None
+    
+    HEDERA_NETWORK: str = "testnet"
+    HEDERA_OPERATOR_ID: str
+    HEDERA_OPERATOR_KEY: str
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:

@@ -1,55 +1,46 @@
 # api/v1/schemas/user.py
-
 from pydantic import BaseModel, EmailStr, validator
+from api.v1.models.user import UserRole
 from typing import Optional
 from datetime import datetime
+from uuid import UUID
 
 class UserCreate(BaseModel):
-    """
-    Schema for user registration input.
-    """
     name: str
     email: EmailStr
     password: str
-    role: str
-    walletAddress: Optional[str] = None
+    role: UserRole = UserRole.DONOR
+    wallet_address: Optional[str] = None
 
-    @validator("role")
-    def validate_role(cls, value):
-        """
-        Ensure the role is one of the allowed values.
-        """
-        allowed_roles = ["donor", "admin", "org"]
-        if value not in allowed_roles:
-            raise ValueError(f"Role must be one of {allowed_roles}")
-        return value
+    @validator("wallet_address")
+    def validate_wallet_address(cls, v):
+        if v and not v.startswith("0.0."):
+            raise ValueError("Invalid Hedera account ID format")
+        return v
 
     @validator("password")
-    def validate_password(cls, value):
-        """
-        Ensure password meets minimum requirements.
-        """
-        if len(value) < 8:
+    def validate_password(cls, v):
+        if len(v) < 8:
             raise ValueError("Password must be at least 8 characters long")
-        return value
+        return v
 
 class Login(BaseModel):
-    """
-    Schema for user login input.
-    """
     email: EmailStr
     password: str
 
+    @validator("password")
+    def validate_password(cls, v):
+        if len(v) < 8:
+            raise ValueError("Password must be at least 8 characters long")
+        return v
+
 class UserResponse(BaseModel):
-    """
-    Schema for user response data (used in register response).
-    """
-    id: int
+    id: UUID
     name: str
     email: EmailStr
-    role: str
-    walletAddress: Optional[str]
-    createdAt: datetime
+    role: UserRole
+    wallet_address: Optional[str]
+    created_at: datetime  # Datetime as string for response
 
     class Config:
-        orm_mode = True  # Enable ORM mode to work with SQLAlchemy models
+        from_attributes = True

@@ -4,7 +4,8 @@ from sqlalchemy import pool
 from alembic import context
 from decouple import config as decouple_config
 from api.v1.models import *
-from api.db.database import Base
+from api.v1.models.base_class import Base 
+from api.utils.settings import settings
 
 
 # this is the Alembic Config object, which provides
@@ -16,7 +17,7 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-database_url = decouple_config('DB_URL')
+database_url = settings.SQLALCHEMY_DATABASE_URI
 
 # Set the SQLAlchemy URL dynamically
 config.set_main_option('sqlalchemy.url', database_url)
