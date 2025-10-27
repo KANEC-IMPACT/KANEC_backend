@@ -1,4 +1,3 @@
-# api/v1/services/donation.py
 from typing import Optional
 from sqlalchemy.orm import Session
 from api.v1.models.donation import Donation, DonationStatus

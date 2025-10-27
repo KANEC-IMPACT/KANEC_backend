@@ -1,4 +1,4 @@
-# api/v1/services/auth.py
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -10,11 +10,16 @@ from api.utils.settings import settings
 from api.v1.schemas.user import UserCreate, Login, UserResponse
 from api.db.database import get_db
 from passlib.context import CryptContext
+from api.v1.services.hedera import create_user_wallet, encrypt_private_key
+import logging
 
-# Password hashing context
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
+
+ENCRYPTION_KEY = settings.PRIVATE_KEY_ENCRYPTION_KEY
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# OAuth2 scheme for JWT
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
 
 async def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
@@ -54,12 +59,20 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 async def register_user(db: Session, user_data: UserCreate) -> dict:
     """
-    Register a new user in the database.
+    Register a new user with auto-generated Hedera wallet and encrypted private key.
     """
     if db.query(User).filter(User.email == user_data.email).first():
         raise ValueError("Email already registered")
-    if user_data.wallet_address and db.query(User).filter(User.wallet_address == user_data.wallet_address).first():
-        raise ValueError("Wallet address already registered")
+
+    try:
+        wallet_address, private_key = await create_user_wallet()
+        logger.info(f"Created Hedera wallet for user: {wallet_address}")
+        
+        encrypted_private_key = encrypt_private_key(private_key, ENCRYPTION_KEY)
+        
+    except Exception as e:
+        logger.error(f"Failed to create wallet for user: {str(e)}")
+        raise ValueError("Failed to create user wallet. Please try again.")
 
     hashed_password = pwd_context.hash(user_data.password)
     new_user = User(
@@ -67,7 +80,8 @@ async def register_user(db: Session, user_data: UserCreate) -> dict:
         email=user_data.email,
         password=hashed_password,
         role=user_data.role,
-        wallet_address=user_data.wallet_address,
+        wallet_address=wallet_address,
+        encrypted_private_key=encrypted_private_key,  
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow()
     )
@@ -77,7 +91,8 @@ async def register_user(db: Session, user_data: UserCreate) -> dict:
 
     return {
         "message": "User registered successfully",
-        "user": UserResponse.from_orm(new_user)
+        "user": UserResponse.from_orm(new_user),
+        "wallet_address": wallet_address
     }
 
 # async def login_user(db: Session, login_data: Login) -> dict:

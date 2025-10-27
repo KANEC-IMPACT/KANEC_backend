@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     HEDERA_NETWORK: str = "testnet"
     HEDERA_OPERATOR_ID: str
     HEDERA_OPERATOR_KEY: str
+    PRIVATE_KEY_ENCRYPTION_KEY: str
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:

@@ -1,4 +1,3 @@
-# api/v1/schemas/user.py
 from pydantic import BaseModel, EmailStr, validator
 from api.v1.models.user import UserRole
 from typing import Optional
@@ -39,8 +38,8 @@ class UserResponse(BaseModel):
     name: str
     email: EmailStr
     role: UserRole
-    wallet_address: Optional[str]
-    created_at: datetime  # Datetime as string for response
+    wallet_address: str
+    created_at: datetime  
 
     class Config:
         from_attributes = True

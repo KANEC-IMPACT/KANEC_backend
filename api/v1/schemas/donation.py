@@ -1,4 +1,3 @@
-# api/v1/schemas/donation.py
 from pydantic import BaseModel
 from datetime import datetime
 from uuid import UUID
@@ -8,8 +7,6 @@ from typing import Optional
 class DonationCreate(BaseModel):
     project_id: UUID
     amount: float
-    donor_wallet: str
-    donor_private_key: str 
 
 class DonationResponse(BaseModel):
     id: UUID

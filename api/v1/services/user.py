@@ -1,5 +1,3 @@
-# api/v1/services/auth.py
-
 from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -10,7 +8,6 @@ from api.v1.models.user import User
 from api.utils.settings import settings
 from api.v1.schemas.user import UserCreate, Login
 
-# Password hashing context
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 class AuthService:
@@ -49,15 +46,12 @@ class AuthService:
         Raises:
             ValueError: If email is already registered
         """
-        # Check if email already exists
         existing_user = db.query(User).filter(User.email == user_data.email).first()
         if existing_user:
             raise ValueError("Email already registered")
 
-        # Hash the password
         hashed_password = pwd_context.hash(user_data.password)
 
-        # Create new user instance
         new_user = User(
             name=user_data.name,
             email=user_data.email,
@@ -67,12 +61,10 @@ class AuthService:
             createdAt=datetime.utcnow()
         )
 
-        # Add to database
         db.add(new_user)
         db.commit()
         db.refresh(new_user)
 
-        # Return user details without sensitive data
         return {
             "message": "User registered successfully",
             "user": {
@@ -84,6 +76,7 @@ class AuthService:
                 "createdAt": new_user.createdAt
             }
         }
+    
     @staticmethod
     def login_user(db: Session, login_data: Login) -> dict:
         """
@@ -99,16 +92,13 @@ class AuthService:
         Raises:
             ValueError: If credentials are invalid
         """
-        # Fetch user by email
         user = db.query(User).filter(User.email == login_data.email).first()
         if not user:
             raise ValueError("Invalid credentials")
 
-        # Verify password
         if not pwd_context.verify(login_data.password, str(user.password)):
             raise ValueError("Invalid credentials")
 
-        # Generate JWT access token
         access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = AuthService.create_access_token(
             data={"sub": user.email}, expires_delta=access_token_expires

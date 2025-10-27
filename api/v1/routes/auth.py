@@ -1,9 +1,9 @@
-# api/v1/routes/auth.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from api.db.database import get_db
-from api.v1.services.auth import register_user, login_user, get_current_user
+from api.v1.services.auth import register_user, login_user, get_current_user, ENCRYPTION_KEY
+from api.v1.services.hedera import get_wallet_balance, decrypt_private_key
 from api.v1.schemas.user import UserCreate, Login, UserResponse
 from api.v1.models.user import User
 
@@ -51,3 +51,36 @@ async def login_user_endpoint(
         return response
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+    
+@auth.get("/profile", response_model=dict)
+async def get_user_profile(current_user: User = Depends(get_current_user)):
+    """
+    Get current user profile with wallet balance.
+    """
+    balance = await get_wallet_balance(current_user.wallet_address)
+    
+    return {
+        "id": current_user.id,
+        "name": current_user.name,
+        "email": current_user.email,
+        "role": current_user.role.value,
+        "wallet_address": current_user.wallet_address,
+        "balance_hbar": balance,
+        "created_at": current_user.created_at
+    }
+
+
+@auth.get("/export-wallet")
+async def export_wallet(current_user: User = Depends(get_current_user)):
+    """
+    Allow users to export their private key (advanced feature).
+    """
+    # Decrypt and return private key
+    decrypted_key = decrypt_private_key(current_user.encrypted_private_key, ENCRYPTION_KEY)
+    
+    return {
+        "warning": "KEEP THIS PRIVATE KEY SECRET! Anyone with this key can access your funds.",
+        "wallet_address": current_user.wallet_address,
+        "private_key": decrypted_key,
+        "backup_instructions": "Write this down and store it securely. Do not share with anyone."
+    }

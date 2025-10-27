@@ -18,6 +18,7 @@ class User(BaseModel):
     password = Column(String(255), nullable=False)
     role = Column(Enum(UserRole), nullable=False, default=UserRole.DONOR)
     wallet_address = Column(String(255), unique=True, nullable=True)
+    encrypted_private_key = Column(String(500), nullable=True)
 
        
     projects = relationship("Project", back_populates="creator", cascade="all, delete-orphan")

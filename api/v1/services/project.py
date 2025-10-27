@@ -1,4 +1,3 @@
-# api/v1/services/project.py
 from sqlalchemy.orm import Session
 from api.v1.models.project import Project
 from api.v1.models.donation import Donation
@@ -12,7 +11,6 @@ async def create_project(db: Session, project: ProjectCreate, user_id: UUID) -> 
     """
     Create a new project with a Hedera wallet in the database.
     """
-    # Create Hedera wallet first
     wallet_address = await create_project_wallet(db)  # No project passed yet
     new_project = Project(
         title=project.title,
@@ -22,7 +20,7 @@ async def create_project(db: Session, project: ProjectCreate, user_id: UUID) -> 
         amount_raised=0.0,
         location=project.location,
         verified=project.verified,
-        wallet_address=wallet_address,  # Set wallet_address
+        wallet_address=wallet_address,  
         created_by=user_id,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc)

@@ -1,7 +1,6 @@
-# api/v1/services/hedera.py
 import asyncio
 from typing import Optional
-from hiero_sdk_python import Client, AccountId, PrivateKey, Hbar, AccountCreateTransaction, AccountInfoQuery, Network, TransferTransaction, TransactionGetReceiptQuery
+from hiero_sdk_python import Client, AccountId, PrivateKey, Hbar, AccountCreateTransaction, AccountInfoQuery, Network, TransferTransaction, TransactionGetReceiptQuery, CryptoGetAccountBalanceQuery
 from api.utils.settings import settings
 from api.v1.models.project import Project
 from api.v1.models.donation import Donation
@@ -10,8 +9,12 @@ import requests
 from uuid import UUID
 import logging
 import time
+import os
+from cryptography.fernet import Fernet
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+import base64
 
-# Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
@@ -43,6 +46,92 @@ async def get_hedera_client() -> Client:
         raise ValueError(f"Failed to initialize Hedera client: {type(e).__name__}: {str(e)}")
     
 
+async def create_user_wallet() -> tuple[str, str]:
+    """
+    Create a new Hedera account for a user and return (wallet_address, encrypted_private_key)
+    """
+    client = await get_hedera_client()
+    loop = asyncio.get_event_loop()
+
+    def sync_create_account():
+        try:
+            new_key = PrivateKey.generate("ecdsa")
+            private_key_string = new_key.to_string()  
+            
+            logger.debug(f"Generating new ECDSA account for user with public key: {new_key.public_key()}")
+
+            operator_key = PrivateKey.from_string(settings.HEDERA_OPERATOR_KEY)
+
+            transaction = (
+                AccountCreateTransaction()
+                .set_key(new_key.public_key())
+                .set_initial_balance(Hbar(1))
+                .set_account_memo("User donation wallet")
+                .freeze_with(client)
+                .sign(operator_key)
+            )
+
+            receipt = transaction.execute(client)
+            logger.debug(f"User wallet transaction submitted: {receipt.transaction_id}")
+
+            if receipt.status != 22:
+                raise ValueError(f"User wallet creation failed with status: {receipt.status}")
+
+            if receipt.account_id is None:
+                raise ValueError("Account ID not found in receipt")
+
+            account_id = str(receipt.account_id)
+            logger.info(f"Successfully created user Hedera account: {account_id}")
+            
+            return account_id, private_key_string
+
+        except Exception as e:
+            logger.error(f"Failed to create user Hedera account: {type(e).__name__}: {str(e)}")
+            raise
+
+    return await loop.run_in_executor(None, sync_create_account)
+
+def encrypt_private_key(private_key: str, encryption_key: str) -> str:
+    """
+    Encrypt a private key using Fernet symmetric encryption.
+    """
+    f = Fernet(encryption_key)
+    encrypted_key = f.encrypt(private_key.encode())
+    return encrypted_key.decode()
+
+def decrypt_private_key(encrypted_key: str, encryption_key: str) -> str:
+    """
+    Decrypt a private key.
+    """
+    f = Fernet(encryption_key)
+    decrypted_key = f.decrypt(encrypted_key.encode())
+    return decrypted_key.decode()
+
+
+async def get_wallet_balance(wallet_address: str) -> float:
+    """
+    Get the HBAR balance of a wallet using the correct pattern from docs.
+    """
+    client = await get_hedera_client()
+    loop = asyncio.get_event_loop()
+
+    def sync_get_balance():
+        try:
+            account_id = AccountId.from_string(wallet_address)
+            balance_query = CryptoGetAccountBalanceQuery().set_account_id(account_id)
+            balance_result = balance_query.execute(client)
+            
+            balance_hbar = balance_result.hbars.to_hbars()
+            logger.debug(f"Balance for {wallet_address}: {balance_hbar} HBAR")
+            return float(balance_hbar)
+            
+        except Exception as e:
+            logger.error(f"Failed to get balance for {wallet_address}: {str(e)}")
+            return 0.0
+
+    balance = await loop.run_in_executor(None, sync_get_balance)
+    return balance
+
 async def create_project_wallet(db: Session, project: Optional[Project] = None) -> str:
     """
     Create a new Hedera account for a project wallet.
@@ -52,13 +141,11 @@ async def create_project_wallet(db: Session, project: Optional[Project] = None) 
 
     def sync_create_account():
         try:
-            # Generate ECDSA key
             new_key = PrivateKey.generate("ecdsa")
             logger.debug(f"Generating new ECDSA account with public key: {new_key.public_key()}")
 
             operator_key = PrivateKey.from_string(settings.HEDERA_OPERATOR_KEY)
 
-            # Create account
             transaction = (
                 AccountCreateTransaction()
                 .set_key(new_key.public_key())
@@ -68,7 +155,6 @@ async def create_project_wallet(db: Session, project: Optional[Project] = None) 
                 .sign(operator_key)
             )
 
-            # Execute and get receipt
             receipt = transaction.execute(client)
             logger.debug(f"Transaction submitted: {receipt.transaction_id}")
             logger.debug(f"Transaction receipt status: {receipt.status}")
@@ -77,7 +163,6 @@ async def create_project_wallet(db: Session, project: Optional[Project] = None) 
             if receipt.account_id is None:
                 raise ValueError(f"Account creation failed. Status code: {receipt.status}")
 
-            # Convert AccountId to string - use str() instead of to_string()
             account_id = str(receipt.account_id)
             logger.info(f"Successfully created Hedera account: {account_id}")
             return account_id
@@ -112,10 +197,8 @@ async def donate_hbar(donor_wallet: str, project_wallet: str, amount_hbar: float
 
             logger.debug(f"Processing donation: {amount_hbar} HBAR from {donor_wallet} to {project_wallet}")
 
-            # Convert HBAR to tinybars (1 HBAR = 100,000,000 tinybars)
             amount_tinybars = int(amount_hbar * 100_000_000)
             
-            # Create and execute transaction
             transaction = (
                 TransferTransaction()
                 .add_hbar_transfer(donor_id, -amount_tinybars)
@@ -124,18 +207,15 @@ async def donate_hbar(donor_wallet: str, project_wallet: str, amount_hbar: float
                 .sign(donor_key)
             )
 
-            # Execute returns receipt directly
             receipt = transaction.execute(client)
             transaction_id = transaction.transaction_id
             
             logger.debug(f"Transaction ID: {transaction_id}")
             logger.debug(f"Transaction status: {receipt.status}")
 
-            # Check if transaction was successful
             if receipt.status != 22:  # SUCCESS
                 raise ValueError(f"Transaction failed with status: {receipt.status}")
 
-            # Try different formats for mirror node
             tx_str = str(transaction_id)
             # Format 1: Replace @ with -
             tx_hash = tx_str.replace('@', '-')
@@ -151,6 +231,140 @@ async def donate_hbar(donor_wallet: str, project_wallet: str, amount_hbar: float
     tx_hash = await loop.run_in_executor(None, sync_donate)
     return tx_hash
 
+async def donate_hbar_from_user(user_id: UUID, project_wallet: str, amount_hbar: float, db: Session) -> str:
+    """
+    Process an HBAR donation using the user's stored private key.
+    """
+    client = await get_hedera_client()
+    loop = asyncio.get_event_loop()
+
+    def sync_donate():
+        try:
+            from api.v1.models.user import User
+            user = db.query(User).filter(User.id == user_id).first()
+            if not user or not user.wallet_address or not user.encrypted_private_key:
+                raise ValueError("User wallet not found or not properly configured")
+
+            donor_id = AccountId.from_string(user.wallet_address)
+            project_id = AccountId.from_string(project_wallet)
+
+            logger.debug(f"Processing donation: {amount_hbar} HBAR from {user.wallet_address} to {project_wallet}")
+
+            amount_tinybars = int(amount_hbar * 100_000_000)
+            
+            donor_private_key_str = decrypt_private_key(user.encrypted_private_key, settings.PRIVATE_KEY_ENCRYPTION_KEY)
+            
+            donor_key = PrivateKey.from_string_ecdsa(donor_private_key_str)
+            logger.debug(f"Using ECDSA key for donation: {donor_key.public_key()}")
+
+            transaction = (
+                TransferTransaction()
+                .add_hbar_transfer(donor_id, -amount_tinybars)
+                .add_hbar_transfer(project_id, amount_tinybars)
+                .freeze_with(client)
+                .sign(donor_key)
+            )
+
+            receipt = transaction.execute(client)
+            transaction_id = transaction.transaction_id
+            
+            logger.debug(f"Transaction ID: {transaction_id}")
+            logger.debug(f"Transaction status: {receipt.status}")
+
+            if receipt.status != 22:
+                raise ValueError(f"Transaction failed with status: {receipt.status}")
+
+            tx_hash = str(transaction_id).replace('@', '-')
+            logger.info(f"Donation transaction completed successfully: {tx_hash}")
+            return tx_hash
+
+        except Exception as e:
+            logger.error(f"Failed to process donation: {type(e).__name__}: {str(e)}")
+            raise
+
+    tx_hash = await loop.run_in_executor(None, sync_donate)
+    return tx_hash
+
+async def transfer_hbar_p2p(sender_user_id: UUID, recipient_wallet: str, amount_hbar: float, db: Session, memo: str = "P2P transfer") -> str:
+    """
+    Transfer HBAR between user wallets (P2P transfer).
+    """
+    client = await get_hedera_client()
+    loop = asyncio.get_event_loop()
+
+    def sync_transfer():
+        try:
+            from api.v1.models.user import User
+            sender = db.query(User).filter(User.id == sender_user_id).first()
+            if not sender or not sender.wallet_address or not sender.encrypted_private_key:
+                raise ValueError("Sender wallet not found or not properly configured")
+
+            sender_id = AccountId.from_string(sender.wallet_address)
+            recipient_id = AccountId.from_string(recipient_wallet)
+
+            logger.debug(f"Processing P2P transfer: {amount_hbar} HBAR from {sender.wallet_address} to {recipient_wallet}")
+
+            amount_tinybars = int(amount_hbar * 100_000_000)
+            
+            donor_private_key_str = decrypt_private_key(sender.encrypted_private_key, settings.PRIVATE_KEY_ENCRYPTION_KEY)
+            
+            logger.debug(f"Decrypted private key length: {len(donor_private_key_str)}")
+            logger.debug(f"Decrypted private key (first 50 chars): {donor_private_key_str[:50]}...")
+            
+            # Try different key loading methods
+            try:
+                # Method 1: Try ECDSA explicitly first
+                donor_key = PrivateKey.from_string_ecdsa(donor_private_key_str)
+                logger.debug("Successfully loaded as ECDSA key")
+            except Exception as e1:
+                logger.debug(f"ECDSA loading failed: {e1}, trying general method")
+                try:
+                    # Method 2: Try general method
+                    donor_key = PrivateKey.from_string(donor_private_key_str)
+                    logger.debug("Successfully loaded with general method")
+                except Exception as e2:
+                    logger.debug(f"General method failed: {e2}, trying from bytes")
+                    try:
+                        # Method 3: Try from bytes
+                        key_bytes = bytes.fromhex(donor_private_key_str)
+                        donor_key = PrivateKey.from_bytes_ecdsa(key_bytes)
+                        logger.debug("Successfully loaded from bytes")
+                    except Exception as e3:
+                        logger.error(f"All key loading methods failed: {e3}")
+                        raise ValueError(f"Failed to load private key: {e3}")
+
+            logger.debug(f"Using key for P2P transfer: {donor_key.public_key()}")
+
+            transaction = (
+                TransferTransaction()
+                .add_hbar_transfer(sender_id, -amount_tinybars)
+                .add_hbar_transfer(recipient_id, amount_tinybars)
+                .set_transaction_memo(memo)
+                .freeze_with(client)
+                .sign(donor_key)
+            )
+
+            # Execute transaction
+            receipt = transaction.execute(client)
+            transaction_id = transaction.transaction_id
+            
+            logger.debug(f"P2P Transaction ID: {transaction_id}")
+            logger.debug(f"P2P Transaction status: {receipt.status}")
+
+            if receipt.status != 22:
+                raise ValueError(f"P2P transfer failed with status: {receipt.status}")
+
+            tx_hash = str(transaction_id).replace('@', '-')
+            logger.info(f"P2P transfer completed successfully: {tx_hash}")
+            return tx_hash
+
+        except Exception as e:
+            logger.error(f"Failed to process P2P transfer: {type(e).__name__}: {str(e)}")
+            raise
+
+    tx_hash = await loop.run_in_executor(None, sync_transfer)
+    return tx_hash
+
 async def verify_transaction(tx_hash: str) -> dict:
     """
     Verify a transaction using Hedera Mirror Node API.
@@ -162,7 +376,6 @@ async def verify_transaction(tx_hash: str) -> dict:
     network = settings.HEDERA_NETWORK.lower()
     mirror_node_url = f"https://{'testnet' if network == 'testnet' else 'mainnet'}.mirrornode.hedera.com"
     
-    # Wait a bit for transaction to be indexed by mirror node
     await asyncio.sleep(5)
     
     # Try multiple transaction ID formats
@@ -221,7 +434,6 @@ async def verify_transaction(tx_hash: str) -> dict:
                     await asyncio.sleep(2 ** attempt)
                     continue
     
-    # If all formats fail, check if we can get transaction info another way
     logger.warning(f"Could not verify transaction {tx_hash} with mirror node using any format")
     return {
         "valid": False,

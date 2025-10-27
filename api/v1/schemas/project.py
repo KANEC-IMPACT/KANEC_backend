@@ -1,4 +1,3 @@
-# api/v1/schemas/project.py
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
@@ -21,7 +20,7 @@ class ProjectResponse(BaseModel):
     amount_raised: float
     location: Optional[str]
     verified: bool
-    wallet_address: str  # Hedera account ID
+    wallet_address: str  
     created_by: UUID
     created_at: datetime
     updated_at: datetime
