@@ -95,43 +95,43 @@ async def register_user(db: Session, user_data: UserCreate) -> dict:
         "wallet_address": wallet_address
     }
 
-# async def login_user(db: Session, login_data: Login) -> dict:
-#     """
-#     Authenticate a user and generate a JWT token.
-#     """
-#     user = db.query(User).filter(User.email == login_data.email).first()
-#     if not user:
-#         raise ValueError("Invalid credentials")
-
-#     hashed_password = str(user.password)
-#     if not hashed_password or not pwd_context.verify(login_data.password, hashed_password):
-#         raise ValueError("Invalid credentials")
-
-#     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-#     access_token = await create_access_token(
-#         data={"sub": user.email}, expires_delta=access_token_expires
-#     )
-#     return {
-#         "access_token": access_token,
-#         "token_type": "bearer",
-#         "user": UserResponse.from_orm(user)
-#     }
-
-async def login_user(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
+async def login_user(db: Session, login_data: Login) -> dict:
     """
-    Authenticate a user and generate a JWT token for OAuth2 password flow.
+    Authenticate a user and generate a JWT token.
     """
-    user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not pwd_context.verify(form_data.password, user.password):
+    user = db.query(User).filter(User.email == login_data.email).first()
+    if not user:
+        raise ValueError("Invalid credentials")
+
+    hashed_password = str(user.password)
+    if not hashed_password or not pwd_context.verify(login_data.password, hashed_password):
         raise ValueError("Invalid credentials")
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
-
     return {
         "access_token": access_token,
         "token_type": "bearer",
         "user": UserResponse.from_orm(user)
     }
+
+# async def login_user(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
+#     """
+#     Authenticate a user and generate a JWT token for OAuth2 password flow.
+#     """
+#     user = db.query(User).filter(User.email == form_data.username).first()
+#     if not user or not pwd_context.verify(form_data.password, user.password):
+#         raise ValueError("Invalid credentials")
+
+#     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+#     access_token = await create_access_token(
+#         data={"sub": user.email}, expires_delta=access_token_expires
+#     )
+
+#     return {
+#         "access_token": access_token,
+#         "token_type": "bearer",
+#         "user": UserResponse.from_orm(user)
+#     }

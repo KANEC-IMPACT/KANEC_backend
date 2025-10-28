@@ -18,6 +18,7 @@ class ProjectResponse(BaseModel):
     category: str
     target_amount: float
     amount_raised: float
+    backers_count: int
     location: Optional[str]
     verified: bool
     wallet_address: str  

@@ -61,6 +61,7 @@ async def create_project(db: Session, project: ProjectCreate, user_id: UUID, ima
         category=project.category,
         target_amount=project.target_amount,
         amount_raised=0.0,
+        backers_count=0,
         location=project.location,
         verified=project.verified,
         wallet_address=wallet_address,  
@@ -147,6 +148,7 @@ async def get_project_transparency(db: Session, project_id: UUID) -> dict:
         "project_id": project_id,
         "wallet_address": project.wallet_address,
         "amount_raised": project.amount_raised,
-        "image": project.image,  # Include image in transparency data
+        "backers_count": project.backers_count,
+        "image": project.image,
         "donations": verified_donations
     }
