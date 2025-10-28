@@ -16,10 +16,10 @@ class Project(BaseModel):
     location = Column(String(255), nullable=True)
     verified = Column(Boolean, default=False)
     wallet_address = Column(String(255), nullable=False)
+    image = Column(String(500), nullable=True)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     # relationships
     creator = relationship("User", back_populates="projects")
     donations = relationship("Donation", back_populates="project", cascade="all, delete-orphan")
-

@@ -21,6 +21,7 @@ class ProjectResponse(BaseModel):
     location: Optional[str]
     verified: bool
     wallet_address: str  
+    image: Optional[str] = None
     created_by: UUID
     created_at: datetime
     updated_at: datetime

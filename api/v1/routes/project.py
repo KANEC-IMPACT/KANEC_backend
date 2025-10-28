@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+
 from sqlalchemy.orm import Session
 from api.db.database import get_db
 from api.v1.services.hedera import create_project_wallet
-from api.v1.services.project import create_project, get_verified_projects, get_project_by_id, verify_project, get_project_transparency
+from api.v1.services.project import create_project, get_verified_projects, get_project_by_id, verify_project, get_project_transparency, upload_project_image
 from api.v1.schemas.project import ProjectCreate, ProjectResponse
 from api.v1.services.auth import get_current_user
 from uuid import UUID
@@ -20,6 +21,33 @@ async def create_project_endpoint(project: ProjectCreate, db: Session = Depends(
             raise HTTPException(status_code=403, detail="Only admins or orgs can create projects")
         new_project = await create_project(db, project, current_user.id)
         return new_project
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.post("/{project_id}/image", response_model=ProjectResponse)
+async def upload_project_image_endpoint(
+    project_id: UUID,
+    image: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Upload an image for a project.
+    """
+    try:
+        if current_user.role.value not in ["admin", "org"]:
+            raise HTTPException(status_code=403, detail="Only admins or orgs can upload project images")
+        
+        # Validate image file type
+        if image.filename:
+            file_extension = image.filename.lower().split('.')[-1]
+            if f".{file_extension}" not in {'.jpg', '.jpeg', '.png', '.gif', '.webp'}:
+                raise HTTPException(status_code=400, detail="Invalid image format. Allowed: jpg, jpeg, png, gif, webp")
+        
+        updated_project = await upload_project_image(db, project_id, image, current_user.id)
+        return updated_project
     except HTTPException as e:
         raise e
     except Exception as e:
