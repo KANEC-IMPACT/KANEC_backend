@@ -11,6 +11,7 @@ A FastAPI-based donation platform that enables cryptocurrency donations using He
 - **Wallet Integration**: Automatic Hedera wallet creation for projects
 - **Transaction Tracing**: Verify and track donation transactions on Hedera
 - **Organization Support**: Organization accounts for managing multiple projects
+- **Advanced AI_Analytics**: AI-powered donation insights, personalized recommendations, and platform analytics
 - **PostgreSQL Database**: Robust data storage with SQLAlchemy ORM
 - **Docker Support**: Containerized deployment with Docker Compose
 
@@ -21,6 +22,7 @@ A FastAPI-based donation platform that enables cryptocurrency donations using He
 - **Blockchain**: Hedera SDK for HBAR transactions
 - **Migration**: Alembic for database schema management
 - **Authentication**: JWT tokens with role-based access control
+- **Data Analysis**: Pandas, NumPy, Scikit-learn for analytics and ML
 - **Containerization**: Docker & Docker Compose
 
 ## Quick Start
@@ -124,6 +126,27 @@ Once the server is running, visit:
 - **ReDoc**: `http://localhost:8000/redoc`
 - **Health Check**: `http://localhost:8000/` (returns `{"status": "ok"}`)
 
+## AI_Analytics Features
+
+The platform provides comprehensive analytics capabilities powered by AI and machine learning:
+
+### User Insights
+- **Personalized Analytics**: Category distribution, donation frequency trends, and impact scores
+- **AI-Powered Recommendations**: Project suggestions based on donation history and preferences
+- **User Impact Scoring**: Multi-factor scoring system with levels (Beginner to Champion)
+- **Comparative Analysis**: User percentile ranking among all donors
+
+### Platform Analytics
+- **Global Statistics**: Total donations, amount raised, projects, and donors
+- **Category Analytics**: Top categories by funding with detailed breakdowns
+- **Project Analytics**: Individual project performance metrics and completion tracking
+- **Real-time Activity**: Recent donations and project creation statistics
+
+### Data-Driven Features
+- **Trend Analysis**: Monthly donation patterns and growth metrics
+- **Predictive Insights**: Donation frequency predictions and category growth analysis
+- **Smart Recommendations**: Content-based filtering for project suggestions
+
 ## API Endpoints
 
 ### Authentication
@@ -142,6 +165,14 @@ Once the server is running, visit:
 
 ### Transaction Tracing
 - `GET /api/v1/trace/trace/{tx_hash}` - Trace donation transaction
+
+### AI_Analytics
+- `GET /api/v1/analytics/user/insights` - Get AI-powered user donation insights and recommendations
+- `GET /api/v1/analytics/global/stats` - Get global platform donation statistics
+- `GET /api/v1/analytics/platform/overview` - Get comprehensive platform analytics with category breakdowns
+- `GET /api/v1/analytics/project/{project_id}` - Get detailed analytics for a specific project
+- `GET /api/v1/analytics/categories/top` - Get top categories by total funding
+- `GET /api/v1/analytics/user/compare` - Compare user donation behavior with platform averages
 
 ## User Roles
 
