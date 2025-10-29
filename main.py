@@ -8,7 +8,8 @@ from api.v1.routes import api_version_one
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
-    debug=settings.DEBUG
+    debug=settings.DEBUG,
+    root_path="/kanec"
 )
 
 app.add_middleware(
