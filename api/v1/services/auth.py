@@ -20,7 +20,7 @@ ENCRYPTION_KEY = settings.PRIVATE_KEY_ENCRYPTION_KEY
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login")
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login_swagger")
 
 async def create_access_token(data: dict, expires_delta: Optional[timedelta] = None) -> str:
     """
@@ -117,21 +117,21 @@ async def login_user(db: Session, login_data: Login) -> dict:
         "user": UserResponse.from_orm(user)
     }
 
-# async def login_user(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
-#     """
-#     Authenticate a user and generate a JWT token for OAuth2 password flow.
-#     """
-#     user = db.query(User).filter(User.email == form_data.username).first()
-#     if not user or not pwd_context.verify(form_data.password, user.password):
-#         raise ValueError("Invalid credentials")
+async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
+    """
+    Authenticate a user and generate a JWT token for OAuth2 password flow.
+    """
+    user = db.query(User).filter(User.email == form_data.username).first()
+    if not user or not pwd_context.verify(form_data.password, user.password):
+        raise ValueError("Invalid credentials")
 
-#     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-#     access_token = await create_access_token(
-#         data={"sub": user.email}, expires_delta=access_token_expires
-#     )
+    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = await create_access_token(
+        data={"sub": user.email}, expires_delta=access_token_expires
+    )
 
-#     return {
-#         "access_token": access_token,
-#         "token_type": "bearer",
-#         "user": UserResponse.from_orm(user)
-#     }
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": UserResponse.from_orm(user)
+    }
