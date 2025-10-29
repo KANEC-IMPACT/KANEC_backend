@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from api.db.database import get_db
-from api.v1.services.auth import register_user, login_user, get_current_user, ENCRYPTION_KEY
+from api.v1.services.auth import register_user, login_user, get_current_user, login_user_swagger, ENCRYPTION_KEY
 from api.v1.services.hedera import get_wallet_balance, decrypt_private_key
 from api.v1.schemas.user import UserCreate, Login, UserResponse
 from api.v1.models.user import User
@@ -38,19 +38,19 @@ async def get_current_user_endpoint(current_user: User = Depends(get_current_use
     """
     return UserResponse.from_orm(current_user)
 
-# @auth.post("/login", response_model=dict)
-# async def login_user_endpoint(
-#     form_data: OAuth2PasswordRequestForm = Depends(),
-#     db: Session = Depends(get_db)
-# ):
-#     """
-#     Authenticate a user and return a JWT token (OAuth2 password flow).
-#     """
-#     try:
-#         response = await login_user(db, form_data)
-#         return response
-#     except ValueError as e:
-#         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+@auth.post("/login_swagger", response_model=dict)
+async def login_user_endpoint(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate a user and return a JWT token (OAuth2 password flow).
+    """
+    try:
+        response = await login_user_swagger(db, form_data)
+        return response
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
     
 @auth.get("/profile", response_model=dict)
 async def get_user_profile(current_user: User = Depends(get_current_user)):
