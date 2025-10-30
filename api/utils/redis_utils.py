@@ -78,6 +78,7 @@ class RedisClient:
             
         stored_otp = await self.get_otp(email)
         
+        # Handle both string and bytes comparison
         if isinstance(stored_otp, bytes):
             stored_otp = stored_otp.decode('utf-8')
         
