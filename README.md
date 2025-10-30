@@ -5,25 +5,38 @@ A FastAPI-based donation platform that enables cryptocurrency donations using He
 
 ## Features
 
-- **User Management**: Role-based authentication (Donor, Admin, Organization)
-- **Project Management**: Create and manage donation projects with HBAR targets
-- **HBAR Donations**: Secure cryptocurrency donations via Hedera network
-- **Wallet Integration**: Automatic Hedera wallet creation for projects
-- **Transaction Tracing**: Verify and track donation transactions on Hedera
+- **User Management**: Role-based authentication (Donor, Admin, Organization) with email verification
+- **Project Management**: Create and manage donation projects with HBAR targets and image uploads
+- **HBAR Donations**: Secure cryptocurrency donations via Hedera network with real-time balance checking
+- **P2P Transfers**: Direct HBAR transfers between user wallets with memo support
+- **Wallet Integration**: Automatic Hedera wallet creation for users and projects with encrypted private key storage
+- **Transaction Tracing**: Verify and track donation transactions on Hedera Mirror Node
 - **Organization Support**: Organization accounts for managing multiple projects
-- **Advanced AI_Analytics**: AI-powered donation insights, personalized recommendations, and platform analytics
-- **PostgreSQL Database**: Robust data storage with SQLAlchemy ORM
-- **Docker Support**: Containerized deployment with Docker Compose
+- **Advanced AI Analytics**: AI-powered donation insights, personalized recommendations, and platform analytics using ML
+- **Profile Management**: Complete user profile management with password changes and account deletion
+- **OTP Verification**: Email verification and password reset with OTP codes
+- **Wallet Export**: Secure private key export functionality for advanced users
+- **PostgreSQL Database**: Robust data storage with SQLAlchemy ORM and Alembic migrations
+- **Docker Support**: Containerized deployment with Docker Compose for development and production
+- **Celery Integration**: Asynchronous task processing with Redis backend
+- **Email Services**: SMTP email sending with Brevo/SendGrid integration
+- **Rate Limiting**: API rate limiting with Redis for security
 
 ## Technology Stack
 
-- **Backend**: FastAPI (Python 3.12)
-- **Database**: PostgreSQL with SQLAlchemy ORM
-- **Blockchain**: Hedera SDK for HBAR transactions
+- **Backend**: FastAPI (Python 3.12) with async support
+- **Database**: PostgreSQL with SQLAlchemy ORM and async support
+- **Blockchain**: Hedera SDK (hiero-sdk-python) for HBAR transactions
 - **Migration**: Alembic for database schema management
 - **Authentication**: JWT tokens with role-based access control
 - **Data Analysis**: Pandas, NumPy, Scikit-learn for analytics and ML
+- **Task Queue**: Celery with Redis backend for async processing
+- **Email**: Brevo/SendGrid API integration with FastAPI-Mail
+- **Caching**: Redis for session management and rate limiting
+- **Security**: Cryptography library for private key encryption
 - **Containerization**: Docker & Docker Compose
+- **Testing**: Pytest with async support
+- **Code Quality**: Black, isort, flake8, pylint
 
 ## Quick Start
 
@@ -75,6 +88,23 @@ A FastAPI-based donation platform that enables cryptocurrency donations using He
    HEDERA_NETWORK=testnet
    HEDERA_OPERATOR_ID=your-hedera-account-id
    HEDERA_OPERATOR_KEY=your-hedera-private-key
+   PRIVATE_KEY_ENCRYPTION_KEY=your-32-character-encryption-key
+
+   # Email Configuration (choose one)
+   BREVO_API_KEY=your-brevo-api-key
+   # OR
+   MAIL_FROM=your-email@example.com
+   MAIL_FROM_NAME=Kanec API
+
+   # Redis Configuration
+   REDIS_HOST=localhost
+   REDIS_PORT=6379
+   REDIS_DB=0
+   REDIS_PASSWORD=your-redis-password
+
+   # Celery Configuration
+   CELERY_BROKER_URL=redis://localhost:6379/0
+   CELERY_RESULT_BACKEND=redis://localhost:6379/0
 
    # CORS Origins
    BACKEND_CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
@@ -149,24 +179,43 @@ The platform provides comprehensive analytics capabilities powered by AI and mac
 
 ## API Endpoints
 
-### Authentication
-- `POST /api/v1/auth/register` - Register new user
+### Authentication & User Management
+- `POST /api/v1/auth/register` - Register new user with email verification
 - `POST /api/v1/auth/login` - User login (OAuth2 password flow)
+- `POST /api/v1/auth/login_swagger` - Login via Swagger UI
+- `GET /api/v1/auth/me` - Get current user details
+- `GET /api/v1/auth/profile` - Get user profile with wallet balance
+- `PUT /api/v1/auth/profile` - Update user profile
+- `PATCH /api/v1/auth/profile` - Partially update user profile
+- `POST /api/v1/auth/change-password` - Change user password
+- `DELETE /api/v1/auth/account` - Delete user account
+- `GET /api/v1/auth/export-wallet` - Export encrypted private key (advanced users)
+- `POST /api/v1/auth/verify-email` - Verify email with OTP
+- `POST /api/v1/auth/resend-verification` - Resend email verification OTP
+- `GET /api/v1/auth/verification-status` - Check email verification status
+- `POST /api/v1/auth/forgot-password` - Request password reset OTP
+- `POST /api/v1/auth/reset-password` - Reset password with OTP
 
 ### Projects
 - `POST /api/v1/projects/` - Create project (admin/org only)
+- `POST /api/v1/projects/{project_id}/image` - Upload project image
 - `GET /api/v1/projects/` - Get all verified projects
 - `GET /api/v1/projects/{project_id}` - Get project details
 - `GET /api/v1/projects/{project_id}/transparency` - Get project transparency data
 - `PATCH /api/v1/projects/{project_id}/verify` - Verify project (admin only)
 
 ### Donations
-- `POST /api/v1/donations/` - Make HBAR donation
+- `POST /api/v1/donations/` - Make HBAR donation from user wallet
+
+### P2P Transfers
+- `POST /api/v1/p2p/transfer` - Transfer HBAR between user wallets
+- `GET /api/v1/p2p/balance` - Get user HBAR balance
+- `POST /api/v1/p2p/validate-wallet` - Validate wallet address
 
 ### Transaction Tracing
-- `GET /api/v1/trace/trace/{tx_hash}` - Trace donation transaction
+- `GET /api/v1/trace/trace/{tx_hash}` - Trace donation transaction on Hedera
 
-### AI_Analytics
+### AI Analytics
 - `GET /api/v1/analytics/user/insights` - Get AI-powered user donation insights and recommendations
 - `GET /api/v1/analytics/global/stats` - Get global platform donation statistics
 - `GET /api/v1/analytics/platform/overview` - Get comprehensive platform analytics with category breakdowns
@@ -174,11 +223,58 @@ The platform provides comprehensive analytics capabilities powered by AI and mac
 - `GET /api/v1/analytics/categories/top` - Get top categories by total funding
 - `GET /api/v1/analytics/user/compare` - Compare user donation behavior with platform averages
 
-## User Roles
+## User Roles & Permissions
 
-- **Donor**: Can view projects and make donations
-- **Organization (Org)**: Can create and manage projects
-- **Admin**: Full access including project verification
+- **Donor**: Can view projects, make donations, access P2P transfers, view personal analytics, manage profile
+- **Organization (Org)**: All donor permissions + create/manage projects, upload project images
+- **Admin**: All permissions + verify projects, access all analytics, manage platform settings
+
+## P2P Transfers
+
+The platform supports direct HBAR transfers between users:
+
+### Features
+- **Secure Transfers**: Encrypted private key handling with balance validation
+- **Memo Support**: Add transaction memos for transfer tracking
+- **Balance Checking**: Real-time balance verification before transfers
+- **Wallet Validation**: Validate recipient wallet addresses
+- **Transfer Limits**: Maximum 10,000 HBAR per transfer for security
+
+### Transfer Process
+1. User initiates transfer with recipient wallet and amount
+2. System validates sender balance and recipient wallet format
+3. Transaction is submitted to Hedera network
+4. Transfer status is tracked and confirmed
+
+## Profile Management
+
+### Features
+- **Profile Updates**: Full profile information management
+- **Password Security**: Secure password changes with validation
+- **Wallet Balance**: Real-time HBAR balance display
+- **Account Deletion**: Complete account removal with data cleanup
+- **Email Verification**: OTP-based email verification system
+
+### Security Features
+- **Private Key Encryption**: AES encryption for stored private keys
+- **JWT Authentication**: Secure token-based authentication
+- **Rate Limiting**: API rate limiting to prevent abuse
+- **Input Validation**: Comprehensive input sanitization
+
+## Email & OTP Verification
+
+### Features
+- **Email Verification**: OTP-based email verification for new accounts
+- **Password Reset**: Secure password reset with OTP codes
+- **Multiple Providers**: Support for Brevo and SendGrid email services
+- **OTP Management**: Secure OTP generation and validation
+- **Resend Functionality**: Ability to resend verification codes
+
+### Verification Process
+1. User registers or requests password reset
+2. OTP code sent to email address
+3. User enters OTP for verification
+4. Account activated or password reset completed
 
 ## Hedera Integration
 
@@ -194,41 +290,82 @@ Ensure your `.env` file includes valid Hedera credentials:
 - `HEDERA_NETWORK`: `testnet` or `mainnet`
 - `HEDERA_OPERATOR_ID`: Your Hedera account ID
 - `HEDERA_OPERATOR_KEY`: Your Hedera private key
+- `PRIVATE_KEY_ENCRYPTION_KEY`: 32-character key for encrypting user private keys
+
+### Email Configuration
+
+Choose one email provider:
+- **Brevo**: Set `BREVO_API_KEY` for Brevo/SendGrid integration
+- **SMTP**: Set `MAIL_FROM` and `MAIL_FROM_NAME` for custom SMTP
+
+### Redis Configuration
+
+Required for Celery and rate limiting:
+- `REDIS_HOST`: Redis server hostname
+- `REDIS_PORT`: Redis server port (default: 6379)
+- `REDIS_DB`: Redis database number
+- `REDIS_PASSWORD`: Redis password (if required)
 
 ## Database Models
 
 ### User
-- Basic user information
+- Basic user information (name, email, role)
 - Role-based permissions (donor/admin/org)
-- Wallet address for donations
+- Hedera wallet address and encrypted private key
+- Email verification status
+- Profile management timestamps
 
 ### Project
-- Project details and fundraising goals
-- HBAR wallet address
-- Verification status
-- Amount raised tracking
+- Project details (title, description, category)
+- Fundraising goals and amount raised tracking
+- HBAR wallet address for donations
+- Verification status and admin approval
+- Image upload support
+- Organization ownership
 
 ### Donation
-- Donation records with transaction hashes
+- Donation records with HBAR amounts
+- Hedera transaction hashes for verification
 - Status tracking (pending/completed/failed)
-- Links to donor and project
+- Links to donor and recipient project
+- Timestamp tracking
 
 ### Organization
-- Organization management
-- Contact information
-- Verification status
+- Organization profile and contact information
+- Verification status for project creation
+- Multiple project management capability
+- Admin approval workflow
 
 ## Testing
 
-Run the test suite:
+Run the complete test suite:
 ```bash
 pytest
 ```
 
+Run tests with coverage:
+```bash
+pytest --cov=api --cov-report=html
+```
+
 Run specific test files:
 ```bash
-python -m unittest tests/v1/auth/test_login.py
+pytest tests/v1/auth/test_signup.py
+pytest tests/v1/analytics/test_analytics_summary.py
 ```
+
+Run tests with async support:
+```bash
+pytest -v --asyncio-mode=auto
+```
+
+### Test Categories
+- **Authentication**: User registration, login, JWT tokens
+- **Projects**: CRUD operations, image uploads, verification
+- **Donations**: HBAR transfers, transaction validation
+- **Analytics**: AI insights, ML recommendations, statistics
+- **P2P Transfers**: Wallet validation, balance checking
+- **Email/OTP**: Verification codes, password reset
 
 ## Database Migrations
 
@@ -261,14 +398,54 @@ Ensure all required environment variables are set in your production environment
 - JWT secret keys
 - CORS origins
 
+## Development Workflow
+
+### Code Quality
+```bash
+# Format code
+black .
+
+# Sort imports
+isort .
+
+# Lint code
+flake8 .
+pylint api/
+
+# Type checking (if configured)
+mypy api/
+```
+
+### Pre-commit Hooks
+```bash
+pre-commit install
+pre-commit run --all-files
+```
+
 ## Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new features
-5. Ensure all tests pass
-6. Submit a pull request
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Set up development environment with Docker:
+   ```bash
+   docker-compose up -d db redis
+   pip install -r requirements.txt
+   ```
+4. Make your changes following the code quality standards
+5. Add comprehensive tests for new features
+6. Ensure all tests pass: `pytest --cov=api --cov-report=html`
+7. Update documentation if needed
+8. Commit your changes (`git commit -m 'Add amazing feature'`)
+9. Push to the branch (`git push origin feature/amazing-feature`)
+10. Open a Pull Request
+
+### Code Standards
+- **Black**: Code formatting
+- **isort**: Import sorting
+- **flake8**: Linting
+- **pylint**: Static analysis
+- **pytest**: Testing with async support
+- **pre-commit**: Automated code quality checks
 
 ## License
 

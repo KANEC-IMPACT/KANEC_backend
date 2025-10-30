@@ -7,7 +7,8 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from api.v1.models.user import User
 from api.utils.settings import settings
-from api.v1.schemas.user import UserCreate, Login, UserResponse
+from api.v1.schemas.user import UserCreate, Login, UserResponse, UserUpdate, PasswordChange
+
 from api.db.database import get_db
 from passlib.context import CryptContext
 from api.v1.services.hedera import create_user_wallet, encrypt_private_key
@@ -89,13 +90,12 @@ async def register_user(db: Session, user_data: UserCreate) -> dict:
         encrypted_private_key=encrypted_private_key,  
         created_at=datetime.utcnow(),
         updated_at=datetime.utcnow(),
-        is_verified=False  # User starts as unverified
+        is_verified=False  
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
-    # Send OTP email via Celery
     try:
         await otp_service.send_verification_otp(db, new_user)
         otp_message = "User registered successfully. Please check your email for verification code."
@@ -122,7 +122,6 @@ async def login_user(db: Session, login_data: Login) -> dict:
     if not hashed_password or not pwd_context.verify(login_data.password, hashed_password):
         raise ValueError("Invalid credentials")
 
-    # Check if user is verified
     if not user.is_verified:
         raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
 
@@ -144,7 +143,6 @@ async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) 
     if not user or not pwd_context.verify(form_data.password, user.password):
         raise ValueError("Invalid credentials")
 
-    # Check if user is verified
     if not user.is_verified:
         raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
 
@@ -158,3 +156,73 @@ async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) 
         "token_type": "bearer",
         "user": UserResponse.from_orm(user)
     }
+
+async def update_user_profile(
+    db: Session, 
+    current_user: User, 
+    user_update: UserUpdate
+) -> User:
+    """
+    Update user profile information
+    """
+    update_data = user_update.model_dump(exclude_unset=True)
+    
+    if not update_data:
+        raise ValueError("No data provided for update")
+    
+    if 'email' in update_data and update_data['email'] != current_user.email:
+        existing_user = db.query(User).filter(
+            User.email == update_data['email'],
+            User.id != current_user.id
+        ).first()
+        if existing_user:
+            raise ValueError("Email already registered")
+        
+        current_user.is_verified = False
+    
+    for field, value in update_data.items():
+        if value is not None:
+            setattr(current_user, field, value)
+    
+    current_user.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(current_user)
+    
+    logger.info(f"User {current_user.id} profile updated")
+    return current_user
+
+async def change_user_password(
+    db: Session,
+    current_user: User,
+    password_change: PasswordChange
+) -> bool:
+    """
+    Change user password after verifying current password
+    """
+    if not pwd_context.verify(password_change.current_password, current_user.password):
+        raise ValueError("Current password is incorrect")
+    
+    new_hashed_password = pwd_context.hash(password_change.new_password)
+    current_user.password = new_hashed_password
+    current_user.updated_at = datetime.utcnow()
+    
+    db.commit()
+    logger.info(f"User {current_user.id} password changed")
+    return True
+
+async def delete_user_account(
+    db: Session,
+    current_user: User,
+    password: str
+) -> bool:
+    """
+    Delete user account after password verification
+    """
+    if not pwd_context.verify(password, current_user.password):
+        raise ValueError("Password is incorrect")
+    
+    db.delete(current_user)
+    db.commit()
+    
+    logger.info(f"User {current_user.id} account deleted")
+    return True

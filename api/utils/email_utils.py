@@ -11,36 +11,28 @@ class EmailUtils:
         self.mail_from = settings.MAIL_FROM
         self.mail_from_name = settings.MAIL_FROM_NAME
 
-    def send_otp_email_sync(self, email: str, otp_code: str, user_name: str):
+    def send_otp_email_sync(self, email: str, otp_code: str, user_name: str, subject: str = None, html_content: str = None):
         """
-        Sync version of send_otp_email using Brevo
+        Sync version of send_otp_email using Brevo with custom content support
         """
-        # Always log OTP to console for development
+        email_type = "PASSWORD RESET" if subject and "Password Reset" in subject else "VERIFICATION"
         print("\n" + "="*50)
-        print("🎯 OTP VERIFICATION CODE")
+        print(f"🎯 {email_type} OTP")
         print("="*50)
         print(f"📧 Email: {email}")
         print(f"👤 User: {user_name}")
         print(f"🔑 OTP Code: {otp_code}")
         print(f"⏰ This code expires in 10 minutes")
-        print("="*50)
-        print("💡 Use this code in the /verify-email endpoint")
         print("="*50 + "\n")
 
-        # If no Brevo API key, use console only
         if not self.brevo_api_key or self.brevo_api_key.startswith("your_"):
-            logger.info(f"OTP logged to console for {email}: {otp_code}")
+            logger.info(f"{email_type} OTP logged to console for {email}: {otp_code}")
             return True
 
-        try:
-            # Configure API key authorization
-            configuration = sib_api_v3_sdk.Configuration()
-            configuration.api_key['api-key'] = self.brevo_api_key
-
-            # Create API instance
-            api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
-
-            # HTML content
+        if subject is None:
+            subject = "Verify Your Email - Kanec"
+        
+        if html_content is None:
             html_content = f"""
             <!DOCTYPE html>
             <html>
@@ -90,7 +82,12 @@ class EmailUtils:
             </html>
             """
 
-            # Create send email object
+        try:
+            configuration = sib_api_v3_sdk.Configuration()
+            configuration.api_key['api-key'] = self.brevo_api_key
+
+            api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
+
             send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
                 sender=sib_api_v3_sdk.SendSmtpEmailSender(
                     name=self.mail_from_name,
@@ -100,22 +97,16 @@ class EmailUtils:
                     email=email,
                     name=user_name
                 )],
-                subject="Verify Your Email - Kanec",
+                subject=subject,
                 html_content=html_content
             )
 
-            # Send email
             api_response = api_instance.send_transac_email(send_smtp_email)
-            logger.info(f"OTP email sent successfully to {email}. Message ID: {api_response.message_id}")
+            logger.info(f"Email sent successfully to {email}. Message ID: {api_response.message_id}")
             return True
 
-        except ApiException as e:
-            logger.error(f"Brevo API exception when sending to {email}: {e}")
-            # Don't raise error - we already logged OTP to console
-            return True
         except Exception as e:
-            logger.error(f"Unexpected error when sending to {email}: {e}")
-            # Don't raise error - we already logged OTP to console
+            logger.error(f"Failed to send email to {email}: {str(e)}")
             return True
 
     async def send_otp_email(self, email: str, otp_code: str, user_name: str):
@@ -124,5 +115,4 @@ class EmailUtils:
         """
         return self.send_otp_email_sync(email, otp_code, user_name)
 
-# Create global instance
 email_utils = EmailUtils()
