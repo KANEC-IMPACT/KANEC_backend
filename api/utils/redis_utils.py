@@ -21,7 +21,6 @@ class RedisClient:
                     socket_timeout=5,
                     retry_on_timeout=True
                 )
-            # Test connection
             self.redis_client.ping()
             logger.info("Redis connection established successfully")
         except Exception as e:
@@ -85,5 +84,4 @@ class RedisClient:
         
         return stored_otp == otp_code
 
-# Global Redis instance
 redis_client = RedisClient()
