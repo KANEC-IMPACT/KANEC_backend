@@ -1,46 +1,35 @@
-# test_brevo.py
-import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
-from api.utils.settings import settings
+# test_otp_flow.py
+import asyncio
+from api.v1.services.otp import otp_service
+from api.utils.redis_utils import redis_client
 
-def test_brevo():
-    print("=== Testing Brevo ===")
-    print(f"BREVO_API_KEY: {'*' * len(settings.BREVO_API_KEY) if settings.BREVO_API_KEY else 'NOT SET'}")
-    print(f"MAIL_FROM: {settings.MAIL_FROM}")
+async def test_otp_flow():
+    test_email = "test@example.com"
     
-    if not settings.BREVO_API_KEY:
-        print("❌ BREVO_API_KEY not set")
-        return False
-        
-    try:
-        configuration = sib_api_v3_sdk.Configuration()
-        configuration.api_key['api-key'] = settings.BREVO_API_KEY
-
-        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(sib_api_v3_sdk.ApiClient(configuration))
-
-        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
-            sender=sib_api_v3_sdk.SendSmtpEmailSender(
-                name="Kanec",
-                email=settings.MAIL_FROM
-            ),
-            to=[sib_api_v3_sdk.SendSmtpEmailTo(
-                email="akinrogundej@gmail.com",
-                name="Test User"
-            )],
-            subject="Brevo Test from Kanec",
-            html_content="<strong>This is a test email from Brevo!</strong>"
-        )
-
-        api_response = api_instance.send_transac_email(send_smtp_email)
-        print(f"✅ Brevo test successful! Message ID: {api_response.message_id}")
-        return True
-        
-    except ApiException as e:
-        print(f"❌ Brevo API exception: {e}")
-        return False
-    except Exception as e:
-        print(f"❌ Brevo test failed: {str(e)}")
-        return False
+    print("=== Testing OTP Flow ===")
+    
+    # Generate OTP
+    otp = otp_service.generate_otp()
+    print(f"1. Generated OTP: {otp}")
+    
+    # Store in Redis
+    print(f"2. Storing OTP for {test_email}...")
+    stored = await redis_client.set_otp(test_email, otp, 600)
+    print(f"   Storage successful: {stored}")
+    
+    # Retrieve from Redis
+    print(f"3. Retrieving OTP for {test_email}...")
+    retrieved = await redis_client.get_otp(test_email)
+    print(f"   Retrieved OTP: {retrieved}")
+    print(f"   Match: {retrieved == otp}")
+    
+    # Test validation
+    print(f"4. Testing validation...")
+    is_valid = await redis_client.is_otp_valid(test_email, otp)
+    print(f"   OTP valid: {is_valid}")
+    
+    # Clean up
+    await redis_client.delete_otp(test_email)
 
 if __name__ == "__main__":
-    test_brevo()
+    asyncio.run(test_otp_flow())
