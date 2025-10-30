@@ -21,7 +21,7 @@ async def register_user_endpoint(user: UserCreate, db: Session = Depends(get_db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@auth.post("/login", response_model=UserResponse)
+@auth.post("/login", response_model=dict)
 async def login_user_endpoint(login: Login, db: Session = Depends(get_db)):
     """
     Authenticate a user and return a JWT token.
