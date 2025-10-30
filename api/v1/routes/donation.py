@@ -2,11 +2,12 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from api.db.database import get_db
 from api.v1.services.hedera import donate_hbar, verify_transaction, update_raised_amount, donate_hbar_from_user, get_wallet_balance
-from api.v1.services.donation import create_donation
-from api.v1.schemas.donation import DonationCreate, DonationResponse
+from api.v1.services.donation import create_donation, get_user_completed_donations
+from api.v1.schemas.donation import DonationCreate, DonationResponse, UserDonationResponse
 from api.v1.models.project import Project
 from api.v1.services.auth import get_current_user
 from api.v1.models.donation import Donation, DonationStatus
+from typing import List
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -56,3 +57,22 @@ async def make_donation(donation: DonationCreate, db: Session = Depends(get_db),
             if not existing_donation:
                 new_donation = await create_donation(db, donation, tx_hash, current_user.id, status="failed")
         raise HTTPException(status_code=400, detail=str(e))
+    
+@router.get("/my-donations", response_model=List[UserDonationResponse])
+async def get_my_donations(
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user)
+):
+    """
+    Get all completed donations made by the current authenticated user
+    Returns project name, amount, transaction hash, status, date, and project category
+    """
+    try:
+        donations = await get_user_completed_donations(db, current_user.id)
+        return donations
+    except Exception as e:
+        logger.error(f"Error fetching donations for user {current_user.id}: {str(e)}")
+        raise HTTPException(
+            status_code=500, 
+            detail="Failed to fetch donations"
+        )

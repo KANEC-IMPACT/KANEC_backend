@@ -5,38 +5,37 @@ A FastAPI-based donation platform that enables cryptocurrency donations using He
 
 ## Features
 
-- **User Management**: Role-based authentication (Donor, Admin, Organization) with email verification
-- **Project Management**: Create and manage donation projects with HBAR targets and image uploads
-- **HBAR Donations**: Secure cryptocurrency donations via Hedera network with real-time balance checking
-- **P2P Transfers**: Direct HBAR transfers between user wallets with memo support
-- **Wallet Integration**: Automatic Hedera wallet creation for users and projects with encrypted private key storage
-- **Transaction Tracing**: Verify and track donation transactions on Hedera Mirror Node
-- **Organization Support**: Organization accounts for managing multiple projects
-- **Advanced AI Analytics**: AI-powered donation insights, personalized recommendations, and platform analytics using ML
-- **Profile Management**: Complete user profile management with password changes and account deletion
-- **OTP Verification**: Email verification and password reset with OTP codes
-- **Wallet Export**: Secure private key export functionality for advanced users
-- **PostgreSQL Database**: Robust data storage with SQLAlchemy ORM and Alembic migrations
-- **Docker Support**: Containerized deployment with Docker Compose for development and production
-- **Celery Integration**: Asynchronous task processing with Redis backend
-- **Email Services**: SMTP email sending with Brevo/SendGrid integration
-- **Rate Limiting**: API rate limiting with Redis for security
+- **User Management**: Role-based authentication (Donor, Admin, Organization) with email verification and OTP
+- **Project Management**: Create and manage donation projects with HBAR targets, image uploads, and verification workflow
+- **HBAR Donations**: Secure cryptocurrency donations via Hedera network with real-time balance validation
+- **P2P Transfers**: Direct HBAR transfers between user wallets with memo support and wallet validation
+- **Wallet Integration**: Automatic Hedera wallet creation for users and projects with encrypted ECDSA private key storage
+- **Transaction Tracing**: Verify and track donation transactions on Hedera Mirror Node with multiple format support
+- **Organization Support**: Organization accounts for managing multiple projects with verification status
+- **Advanced AI Analytics**: ML-powered donation insights, personalized project recommendations, and comprehensive platform analytics
+- **Profile Management**: Complete user profile management with password changes, account deletion, and wallet export
+- **Email Services**: SMTP email sending with Brevo/SendGrid integration for notifications and OTP verification
+- **PostgreSQL Database**: Robust data storage with SQLAlchemy async ORM and Alembic migrations
+- **Docker Support**: Containerized deployment with Docker Compose for development and production environments
+- **Celery Integration**: Asynchronous task processing with Redis backend for background jobs
+- **Rate Limiting**: API rate limiting with Redis for security and abuse prevention
+- **Security**: Cryptography-based private key encryption and JWT authentication
 
 ## Technology Stack
 
-- **Backend**: FastAPI (Python 3.12) with async support
-- **Database**: PostgreSQL with SQLAlchemy ORM and async support
-- **Blockchain**: Hedera SDK (hiero-sdk-python) for HBAR transactions
+- **Backend**: FastAPI (Python 3.12) with async/await support
+- **Database**: PostgreSQL with SQLAlchemy async ORM
+- **Blockchain**: Hedera SDK (hiero-sdk-python) for HBAR transactions and wallet management
 - **Migration**: Alembic for database schema management
-- **Authentication**: JWT tokens with role-based access control
-- **Data Analysis**: Pandas, NumPy, Scikit-learn for analytics and ML
-- **Task Queue**: Celery with Redis backend for async processing
+- **Authentication**: JWT tokens with role-based access control (Donor/Admin/Org)
+- **Data Analysis**: Pandas, NumPy, Scikit-learn for ML-powered analytics
+- **Task Queue**: Celery with Redis backend for asynchronous processing
 - **Email**: Brevo/SendGrid API integration with FastAPI-Mail
-- **Caching**: Redis for session management and rate limiting
-- **Security**: Cryptography library for private key encryption
-- **Containerization**: Docker & Docker Compose
-- **Testing**: Pytest with async support
-- **Code Quality**: Black, isort, flake8, pylint
+- **Caching**: Redis for session management, rate limiting, and caching
+- **Security**: Cryptography library for ECDSA private key encryption
+- **Containerization**: Docker & Docker Compose for development/production
+- **Testing**: Pytest with async support and comprehensive test coverage
+- **Code Quality**: Black, isort, flake8, pylint for consistent code standards
 
 ## Quick Start
 
@@ -135,15 +134,25 @@ A FastAPI-based donation platform that enables cryptocurrency donations using He
 ```bash
 python main.py
 ```
-The API will be available at `http://localhost:8000`
+The API will be available at `http://localhost:8000` with root path `/kanec`
 
-#### Using Docker Compose
+#### Using Docker Compose (Development)
 ```bash
 docker-compose up --build
 ```
 The API will be available at `http://localhost:7006`
 
-#### Using Docker (Production)
+#### Using Docker Compose (Staging)
+```bash
+docker-compose -f docker-compose.staging.yml up --build
+```
+
+#### Using Docker Compose (Production)
+```bash
+docker-compose -f docker-compose.prod.yml up --build
+```
+
+#### Using Docker (Standalone)
 ```bash
 docker build -t kanec-api .
 docker run -p 7001:7001 --env-file .env kanec-api
@@ -162,20 +171,20 @@ The platform provides comprehensive analytics capabilities powered by AI and mac
 
 ### User Insights
 - **Personalized Analytics**: Category distribution, donation frequency trends, and impact scores
-- **AI-Powered Recommendations**: Project suggestions based on donation history and preferences
+- **ML-Powered Recommendations**: Project suggestions based on donation history and preferences using collaborative filtering
 - **User Impact Scoring**: Multi-factor scoring system with levels (Beginner to Champion)
 - **Comparative Analysis**: User percentile ranking among all donors
 
 ### Platform Analytics
 - **Global Statistics**: Total donations, amount raised, projects, and donors
-- **Category Analytics**: Top categories by funding with detailed breakdowns
+- **Category Analytics**: Top categories by funding with detailed breakdowns and growth metrics
 - **Project Analytics**: Individual project performance metrics and completion tracking
 - **Real-time Activity**: Recent donations and project creation statistics
 
 ### Data-Driven Features
-- **Trend Analysis**: Monthly donation patterns and growth metrics
+- **Trend Analysis**: Monthly donation patterns and growth metrics using time-series analysis
 - **Predictive Insights**: Donation frequency predictions and category growth analysis
-- **Smart Recommendations**: Content-based filtering for project suggestions
+- **Smart Recommendations**: Content-based and collaborative filtering for project suggestions
 
 ## API Endpoints
 
@@ -205,18 +214,19 @@ The platform provides comprehensive analytics capabilities powered by AI and mac
 - `PATCH /api/v1/projects/{project_id}/verify` - Verify project (admin only)
 
 ### Donations
-- `POST /api/v1/donations/` - Make HBAR donation from user wallet
+- `POST /api/v1/donations/` - Make HBAR donation from user wallet to project
+- `GET /api/v1/donations/my-donations` - Get user's completed donations with project details
 
 ### P2P Transfers
-- `POST /api/v1/p2p/transfer` - Transfer HBAR between user wallets
+- `POST /api/v1/p2p/transfer` - Transfer HBAR between user wallets with memo support
 - `GET /api/v1/p2p/balance` - Get user HBAR balance
-- `POST /api/v1/p2p/validate-wallet` - Validate wallet address
+- `POST /api/v1/p2p/validate-wallet` - Validate wallet address format and existence
 
 ### Transaction Tracing
-- `GET /api/v1/trace/trace/{tx_hash}` - Trace donation transaction on Hedera
+- `GET /api/v1/trace/trace/{tx_hash}` - Trace donation transaction on Hedera Mirror Node
 
 ### AI Analytics
-- `GET /api/v1/analytics/user/insights` - Get AI-powered user donation insights and recommendations
+- `GET /api/v1/analytics/user/insights` - Get ML-powered user donation insights and personalized recommendations
 - `GET /api/v1/analytics/global/stats` - Get global platform donation statistics
 - `GET /api/v1/analytics/platform/overview` - Get comprehensive platform analytics with category breakdowns
 - `GET /api/v1/analytics/project/{project_id}` - Get detailed analytics for a specific project
@@ -241,10 +251,10 @@ The platform supports direct HBAR transfers between users:
 - **Transfer Limits**: Maximum 10,000 HBAR per transfer for security
 
 ### Transfer Process
-1. User initiates transfer with recipient wallet and amount
-2. System validates sender balance and recipient wallet format
-3. Transaction is submitted to Hedera network
-4. Transfer status is tracked and confirmed
+1. User initiates transfer with recipient wallet, amount, and optional memo
+2. System validates sender balance, recipient wallet format, and transfer limits (max 10,000 HBAR)
+3. Transaction is submitted to Hedera network with memo support
+4. Transfer status is tracked and confirmed via transaction hash
 
 ## Profile Management
 
@@ -288,9 +298,9 @@ The platform integrates with Hedera network for:
 
 Ensure your `.env` file includes valid Hedera credentials:
 - `HEDERA_NETWORK`: `testnet` or `mainnet`
-- `HEDERA_OPERATOR_ID`: Your Hedera account ID
-- `HEDERA_OPERATOR_KEY`: Your Hedera private key
-- `PRIVATE_KEY_ENCRYPTION_KEY`: 32-character key for encrypting user private keys
+- `HEDERA_OPERATOR_ID`: Your Hedera account ID (format: 0.0.xxxxx)
+- `HEDERA_OPERATOR_KEY`: Your Hedera private key (ECDSA format)
+- `PRIVATE_KEY_ENCRYPTION_KEY`: 32-character key for encrypting user private keys using Fernet
 
 ### Email Configuration
 
@@ -310,31 +320,32 @@ Required for Celery and rate limiting:
 
 ### User
 - Basic user information (name, email, role)
-- Role-based permissions (donor/admin/org)
-- Hedera wallet address and encrypted private key
-- Email verification status
-- Profile management timestamps
+- Role-based permissions (donor/admin/org) with enum validation
+- Hedera wallet address and encrypted ECDSA private key
+- Email verification status and OTP management
+- Profile management with timestamps (created_at, updated_at)
 
 ### Project
-- Project details (title, description, category)
-- Fundraising goals and amount raised tracking
-- HBAR wallet address for donations
-- Verification status and admin approval
-- Image upload support
-- Organization ownership
+- Project details (title, description, category, location)
+- Fundraising goals (target_amount) and amount_raised tracking
+- HBAR wallet address for donations (auto-generated)
+- Verification status and admin approval workflow
+- Image upload support with file path storage
+- Organization ownership with foreign key relationship
+- Backers count tracking
 
 ### Donation
-- Donation records with HBAR amounts
-- Hedera transaction hashes for verification
-- Status tracking (pending/completed/failed)
-- Links to donor and recipient project
-- Timestamp tracking
+- Donation records with HBAR amounts and transaction hashes
+- Hedera transaction hashes for verification (unique constraint)
+- Status tracking (pending/completed/failed) with enum
+- Foreign key relationships to donor (User) and project
+- Timestamp tracking (created_at, updated_at)
 
 ### Organization
-- Organization profile and contact information
-- Verification status for project creation
-- Multiple project management capability
+- Organization profile (name, contact_email, region)
+- Verification status for project creation permissions
 - Admin approval workflow
+- Foreign key relationship to creator (User)
 
 ## Testing
 
