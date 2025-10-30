@@ -22,13 +22,10 @@ class Settings(BaseSettings):
 
     BACKEND_CORS_ORIGINS: List[str] = ["http://127.0.0.1:8000"]
 
-    MAIL_SERVER: Optional[str] = None
-    MAIL_PORT: Optional[int] = None
-    MAIL_USERNAME: Optional[str] = None
-    MAIL_PASSWORD: Optional[str] = None
+
+    BREVO_API_KEY: Optional[str] = None
     MAIL_FROM: Optional[str] = None
-    EMAIL_USE_SSL: bool = False
-    EMAIL_USE_TLS: bool = True
+    MAIL_FROM_NAME: str = "Kanec"
 
     VERIFICATION_BASE_URL: Optional[str] = None
 

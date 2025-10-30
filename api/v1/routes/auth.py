@@ -6,6 +6,7 @@ from api.v1.services.auth import register_user, login_user, get_current_user, lo
 from api.v1.services.hedera import get_wallet_balance, decrypt_private_key
 from api.v1.schemas.user import UserCreate, Login, UserResponse
 from api.v1.models.user import User
+from api.v1.services.otp import otp_service
 
 auth = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -20,7 +21,7 @@ async def register_user_endpoint(user: UserCreate, db: Session = Depends(get_db)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
-@auth.post("/login", response_model=dict)
+@auth.post("/login", response_model=UserResponse)
 async def login_user_endpoint(login: Login, db: Session = Depends(get_db)):
     """
     Authenticate a user and return a JWT token.
@@ -83,4 +84,66 @@ async def export_wallet(current_user: User = Depends(get_current_user)):
         "wallet_address": current_user.wallet_address,
         "private_key": decrypted_key,
         "backup_instructions": "Write this down and store it securely. Do not share with anyone."
+    }
+
+
+@auth.post("/verify-email", status_code=status.HTTP_200_OK, response_model=dict)
+async def verify_email(
+    email: str, 
+    otp_code: str, 
+    db: Session = Depends(get_db)
+):
+    """
+    Verify user email with OTP code.
+    """
+    try:
+        await otp_service.verify_otp(db, email, otp_code)
+        return {
+            "message": "Email verified successfully",
+            "is_verified": True
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=str(e)
+        )
+
+@auth.post("/resend-verification", status_code=status.HTTP_200_OK, response_model=dict)
+async def resend_verification(
+    email: str, 
+    db: Session = Depends(get_db)
+):
+    """
+    Resend verification OTP code.
+    """
+    try:
+        await otp_service.resend_otp(db, email)
+        return {
+            "message": "Verification code sent successfully"
+        }
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, 
+            detail=str(e)
+        )
+
+# Add a new endpoint to check verification status
+@auth.get("/verification-status", response_model=dict)
+async def get_verification_status(
+    email: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Check if a user's email is verified.
+    """
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    return {
+        "email": user.email,
+        "is_verified": user.is_verified
     }

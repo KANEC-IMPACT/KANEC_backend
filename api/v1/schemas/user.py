@@ -40,6 +40,7 @@ class UserResponse(BaseModel):
     role: UserRole
     wallet_address: str
     created_at: datetime  
+    is_verified: bool
 
     class Config:
         from_attributes = True
