@@ -11,6 +11,7 @@ from api.v1.schemas.user import UserCreate, Login, UserResponse
 from api.db.database import get_db
 from passlib.context import CryptContext
 from api.v1.services.hedera import create_user_wallet, encrypt_private_key
+from api.v1.services.otp import otp_service
 import logging
 
 logging.basicConfig(level=logging.DEBUG)
@@ -18,7 +19,11 @@ logger = logging.getLogger(__name__)
 
 ENCRYPTION_KEY = settings.PRIVATE_KEY_ENCRYPTION_KEY
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(
+    schemes=["bcrypt"],
+    deprecated="auto",
+    bcrypt__rounds=12
+)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/v1/auth/login_swagger")
 
@@ -83,16 +88,26 @@ async def register_user(db: Session, user_data: UserCreate) -> dict:
         wallet_address=wallet_address,
         encrypted_private_key=encrypted_private_key,  
         created_at=datetime.utcnow(),
-        updated_at=datetime.utcnow()
+        updated_at=datetime.utcnow(),
+        is_verified=False  # User starts as unverified
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
 
+    # Send OTP email via Celery
+    try:
+        await otp_service.send_verification_otp(db, new_user)
+        otp_message = "User registered successfully. Please check your email for verification code."
+    except Exception as e:
+        logger.error(f"Failed to send OTP email: {str(e)}")
+        otp_message = "User registered successfully, but verification email failed. Please contact support."
+
     return {
-        "message": "User registered successfully",
+        "message": otp_message,
         "user": UserResponse.from_orm(new_user),
-        "wallet_address": wallet_address
+        "wallet_address": wallet_address,
+        "is_verified": False
     }
 
 async def login_user(db: Session, login_data: Login) -> dict:
@@ -106,6 +121,10 @@ async def login_user(db: Session, login_data: Login) -> dict:
     hashed_password = str(user.password)
     if not hashed_password or not pwd_context.verify(login_data.password, hashed_password):
         raise ValueError("Invalid credentials")
+
+    # Check if user is verified
+    if not user.is_verified:
+        raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
@@ -124,6 +143,10 @@ async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) 
     user = db.query(User).filter(User.email == form_data.username).first()
     if not user or not pwd_context.verify(form_data.password, user.password):
         raise ValueError("Invalid credentials")
+
+    # Check if user is verified
+    if not user.is_verified:
+        raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
 
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = await create_access_token(
