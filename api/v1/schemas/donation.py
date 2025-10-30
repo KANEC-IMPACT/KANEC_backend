@@ -20,3 +20,15 @@ class DonationResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class UserDonationResponse(BaseModel):
+    id: UUID
+    project_name: str
+    amount: float
+    tx_hash: str
+    status: DonationStatus
+    donated_at: datetime
+    project_category: str
+
+    class Config:
+        from_attributes = True
