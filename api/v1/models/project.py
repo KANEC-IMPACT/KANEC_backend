@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Text, Boolean, Float, ForeignKey, Integer
+from sqlalchemy import Column, String, Text, Boolean, Float, ForeignKey, Integer, LargeBinary
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
@@ -17,7 +17,8 @@ class Project(BaseModel):
     location = Column(String(255), nullable=True)
     verified = Column(Boolean, default=False)
     wallet_address = Column(String(255), nullable=False)
-    image = Column(String(500), nullable=True)
+    image = Column(LargeBinary, nullable=True) 
+    image_mime_type = Column(String(50), nullable=True)
 
     created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 

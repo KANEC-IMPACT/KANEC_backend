@@ -20,7 +20,7 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"]
 )
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static/projects/", StaticFiles(directory="static"), name="static")
 
 app.include_router(api_version_one)
 

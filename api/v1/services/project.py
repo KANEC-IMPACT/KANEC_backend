@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from api.v1.models.project import Project
 from api.v1.models.donation import Donation
-from api.v1.schemas.project import ProjectCreate, ProjectResponse
+from api.v1.schemas.project import ProjectCreate, ProjectResponse, ProjectDB
 from api.v1.services.hedera import create_project_wallet, verify_transaction
 from datetime import datetime, timezone
 from uuid import UUID
@@ -10,18 +10,36 @@ import os
 import uuid
 from PIL import Image
 import io
+from fastapi import HTTPException
 
-# Configure upload directory
-UPLOAD_DIR = "static/projects"
+# Remove UPLOAD_DIR since we're storing in DB
 ALLOWED_EXTENSIONS = {'.jpg', '.jpeg', '.png', '.gif', '.webp'}
 MAX_IMAGE_SIZE = (1200, 800)  # Optimal size for web display
 
-async def optimize_and_save_image(image_file, upload_dir: str, filename: str) -> str:
+def project_to_response(project: Project) -> ProjectResponse:
+    """Convert database Project model to API response model"""
+    return ProjectResponse(
+        id=project.id,
+        title=project.title,
+        description=project.description,
+        category=project.category,
+        target_amount=project.target_amount,
+        amount_raised=project.amount_raised,
+        backers_count=project.backers_count,
+        location=project.location,
+        verified=project.verified,
+        wallet_address=project.wallet_address,
+        image=f"/projects/{project.id}/image" if project.image else None,
+        image_mime_type=project.image_mime_type,
+        created_by=project.created_by,
+        created_at=project.created_at,
+        updated_at=project.updated_at
+    )
+
+async def optimize_image(image_file) -> tuple[bytes, str]:
     """
-    Optimize and save uploaded image with proper sizing and compression.
+    Optimize uploaded image and return binary data and MIME type.
     """
-    os.makedirs(upload_dir, exist_ok=True)
-    
     # Read image file
     image_data = await image_file.read()
     image = Image.open(io.BytesIO(image_data))
@@ -33,27 +51,24 @@ async def optimize_and_save_image(image_file, upload_dir: str, filename: str) ->
     # Resize image while maintaining aspect ratio
     image.thumbnail(MAX_IMAGE_SIZE, Image.Resampling.LANCZOS)
     
-    # Generate unique filename
-    file_extension = '.webp'  # Use modern format for better compression
-    unique_filename = f"{filename}{file_extension}"
-    file_path = os.path.join(upload_dir, unique_filename)
+    # Convert to bytes
+    output = io.BytesIO()
+    image.save(output, 'WEBP', quality=85, optimize=True)
+    optimized_data = output.getvalue()
     
-    # Save optimized image
-    image.save(file_path, 'WEBP', quality=85, optimize=True)
-    
-    return f"/static/projects/{unique_filename}"
+    return optimized_data, 'image/webp'
 
-async def create_project(db: Session, project: ProjectCreate, user_id: UUID, image_file = None) -> Project:
+async def create_project(db: Session, project: ProjectCreate, user_id: UUID, image_file = None) -> ProjectResponse:
     """
     Create a new project with a Hedera wallet in the database.
     """
     wallet_address = await create_project_wallet(db)
     
     # Handle image upload if provided
-    image_path = None
+    image_data = None
+    mime_type = None
     if image_file:
-        filename = str(uuid.uuid4())
-        image_path = await optimize_and_save_image(image_file, UPLOAD_DIR, filename)
+        image_data, mime_type = await optimize_image(image_file)
     
     new_project = Project(
         title=project.title,
@@ -65,7 +80,8 @@ async def create_project(db: Session, project: ProjectCreate, user_id: UUID, ima
         location=project.location,
         verified=project.verified,
         wallet_address=wallet_address,  
-        image=image_path,  # Store the image path
+        image=image_data,  # Store binary data
+        image_mime_type=mime_type,  # Store MIME type
         created_by=user_id,
         created_at=datetime.now(timezone.utc),
         updated_at=datetime.now(timezone.utc)
@@ -73,11 +89,11 @@ async def create_project(db: Session, project: ProjectCreate, user_id: UUID, ima
     db.add(new_project)
     db.commit()
     db.refresh(new_project)
-    return new_project
+    return project_to_response(new_project)
 
-async def upload_project_image(db: Session, project_id: UUID, image_file, user_id: UUID) -> Project:
+async def upload_project_image(db: Session, project_id: UUID, image_file, user_id: UUID) -> ProjectResponse:
     """
-    Upload and optimize image for a project.
+    Upload and optimize image for a project (store in database).
     """
     project = db.query(Project).filter(Project.id == project_id).first()
     if not project:
@@ -87,31 +103,45 @@ async def upload_project_image(db: Session, project_id: UUID, image_file, user_i
     if project.created_by != user_id:
         raise ValueError("Not authorized to update this project")
     
-    # Handle image upload
-    filename = str(uuid.uuid4())
-    image_path = await optimize_and_save_image(image_file, UPLOAD_DIR, filename)
+    # Handle image upload and optimization
+    image_data, mime_type = await optimize_image(image_file)
     
-    # Update project with new image
-    project.image = image_path
+    # Update project with new image data
+    project.image = image_data
+    project.image_mime_type = mime_type
     project.updated_at = datetime.now(timezone.utc)
     
     db.commit()
     db.refresh(project)
-    return project
+    return project_to_response(project)
 
-async def get_verified_projects(db: Session) -> List[Project]:
+async def get_project_image(db: Session, project_id: UUID) -> tuple[bytes, str]:
+    """
+    Get image data and MIME type for a project.
+    """
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project or not project.image:
+        raise ValueError("Project or image not found")
+    
+    return project.image, project.image_mime_type or 'image/webp'
+
+async def get_verified_projects(db: Session) -> List[ProjectResponse]:
     """
     Get all verified projects.
     """
-    return db.query(Project).filter(Project.verified == True).all()
+    projects = db.query(Project).filter(Project.verified == True).all()
+    return [project_to_response(project) for project in projects]
 
-async def get_project_by_id(db: Session, project_id: UUID) -> Project:
+async def get_project_by_id(db: Session, project_id: UUID) -> ProjectResponse:
     """
     Get a project by its ID.
     """
-    return db.query(Project).filter(Project.id == project_id).first()
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project:
+        return None
+    return project_to_response(project)
 
-async def verify_project(db: Session, project_id: UUID) -> Project:
+async def verify_project(db: Session, project_id: UUID) -> ProjectResponse:
     """
     Verify a project (set verified=True).
     """
@@ -121,7 +151,7 @@ async def verify_project(db: Session, project_id: UUID) -> Project:
     project.verified = True
     db.commit()
     db.refresh(project)
-    return project
+    return project_to_response(project)
 
 async def get_project_transparency(db: Session, project_id: UUID) -> dict:
     """
@@ -149,6 +179,6 @@ async def get_project_transparency(db: Session, project_id: UUID) -> dict:
         "wallet_address": project.wallet_address,
         "amount_raised": project.amount_raised,
         "backers_count": project.backers_count,
-        "image": project.image,
+        "image": f"/projects/{project_id}/image" if project.image else None,
         "donations": verified_donations
     }
