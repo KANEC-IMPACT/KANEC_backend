@@ -1,9 +1,8 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Response
 from sqlalchemy.orm import Session
 from api.db.database import get_db
 from api.v1.services.hedera import create_project_wallet
-from api.v1.services.project import create_project, get_verified_projects, get_project_by_id, verify_project, get_project_transparency, upload_project_image
+from api.v1.services.project import create_project, get_verified_projects, get_project_by_id, verify_project, get_project_transparency, upload_project_image, get_project_image
 from api.v1.schemas.project import ProjectCreate, ProjectResponse
 from api.v1.services.auth import get_current_user
 from uuid import UUID
@@ -50,6 +49,22 @@ async def upload_project_image_endpoint(
         return updated_project
     except HTTPException as e:
         raise e
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/{project_id}/image")
+async def get_project_image_endpoint(
+    project_id: UUID,
+    db: Session = Depends(get_db)
+):
+    """
+    Get project image as binary data.
+    """
+    try:
+        image_data, mime_type = await get_project_image(db, project_id)
+        return Response(content=image_data, media_type=mime_type)
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
