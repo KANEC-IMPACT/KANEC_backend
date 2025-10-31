@@ -116,11 +116,11 @@ async def login_user(db: Session, login_data: Login) -> dict:
     """
     user = db.query(User).filter(User.email == login_data.email).first()
     if not user:
-        raise ValueError("Invalid credentials")
+        raise ValueError("Invalid email or password")
 
     hashed_password = str(user.password)
     if not hashed_password or not pwd_context.verify(login_data.password, hashed_password):
-        raise ValueError("Invalid credentials")
+        raise ValueError("Invalid email or password")
 
     if not user.is_verified:
         raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
@@ -140,8 +140,11 @@ async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) 
     Authenticate a user and generate a JWT token for OAuth2 password flow.
     """
     user = db.query(User).filter(User.email == form_data.username).first()
-    if not user or not pwd_context.verify(form_data.password, user.password):
-        raise ValueError("Invalid credentials")
+    if not user:
+        raise ValueError("Invalid email or password")
+        
+    if not pwd_context.verify(form_data.password, user.password):
+        raise ValueError("Invalid email or password")
 
     if not user.is_verified:
         raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
