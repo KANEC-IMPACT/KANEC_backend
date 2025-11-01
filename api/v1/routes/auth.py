@@ -318,7 +318,7 @@ async def refresh_token(
             value=access_token,
             httponly=True,
             secure=True,
-            samesite="strict",
+            samesite="none",
             max_age=60 * 60 * 24,
             path="/"
         )

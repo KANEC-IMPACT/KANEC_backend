@@ -138,7 +138,7 @@ async def login_user(db: Session, login_data: Login, response: Response = None) 
             value=access_token,
             httponly=True,
             secure=True,  # HTTPS only in production
-            samesite="strict",
+            samesite="none",
             max_age=60 * 60 * 24,  # 24 hours in seconds
             path="/"
         )
