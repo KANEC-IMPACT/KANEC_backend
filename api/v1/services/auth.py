@@ -140,7 +140,8 @@ async def login_user(db: Session, login_data: Login, response: Response = None) 
             secure=True,  # HTTPS only in production
             samesite="none",
             max_age=60 * 60 * 24,  # 24 hours in seconds
-            path="/"
+            path="/",
+            domain=".konasalti.com"
         )
     
     return {
@@ -178,7 +179,8 @@ async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm, 
             secure=True,
             samesite="strict", 
             max_age=60 * 60 * 24,
-            path="/"
+            path="/",
+            domain=".konasalti.com"
         )
 
     return {

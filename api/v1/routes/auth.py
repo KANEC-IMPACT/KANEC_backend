@@ -320,7 +320,8 @@ async def refresh_token(
             secure=True,
             samesite="none",
             max_age=60 * 60 * 24,
-            path="/"
+            path="/",
+            domain=".konasalti.com"
         )
         
         return {
