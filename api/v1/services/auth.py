@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 from sqlalchemy.orm import Session
 from jose import jwt, JWTError
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Response
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from api.v1.models.user import User
 from api.utils.settings import settings
@@ -110,7 +110,7 @@ async def register_user(db: Session, user_data: UserCreate) -> dict:
         "is_verified": False
     }
 
-async def login_user(db: Session, login_data: Login) -> dict:
+async def login_user(db: Session, login_data: Login, response: Response = None) -> dict:
     """
     Authenticate a user and generate a JWT token.
     """
@@ -125,17 +125,31 @@ async def login_user(db: Session, login_data: Login) -> dict:
     if not user.is_verified:
         raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Increase token expiration to 24 hours
+    access_token_expires = timedelta(hours=24)
     access_token = await create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
+    
+    # Set HttpOnly cookie if response object is provided
+    if response:
+        response.set_cookie(
+            key="token",
+            value=access_token,
+            httponly=True,
+            secure=True,  # HTTPS only in production
+            samesite="strict",
+            max_age=60 * 60 * 24,  # 24 hours in seconds
+            path="/"
+        )
+    
     return {
-        "access_token": access_token,
+        "access_token": access_token,  # Still return for clients that need it
         "token_type": "bearer",
         "user": UserResponse.from_orm(user)
     }
 
-async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) -> dict:
+async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm, response: Response = None) -> dict:
     """
     Authenticate a user and generate a JWT token for OAuth2 password flow.
     """
@@ -149,10 +163,23 @@ async def login_user_swagger(db: Session, form_data: OAuth2PasswordRequestForm) 
     if not user.is_verified:
         raise ValueError("Please verify your email before logging in. Check your email for the verification code.")
 
-    access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    # Increase token expiration to 24 hours
+    access_token_expires = timedelta(hours=24)
     access_token = await create_access_token(
         data={"sub": user.email}, expires_delta=access_token_expires
     )
+    
+    # Set HttpOnly cookie if response object is provided
+    if response:
+        response.set_cookie(
+            key="token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="strict", 
+            max_age=60 * 60 * 24,
+            path="/"
+        )
 
     return {
         "access_token": access_token,
