@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm
 from api.db.database import get_db
-from api.v1.services.auth import register_user, login_user, get_current_user, login_user_swagger, ENCRYPTION_KEY, update_user_profile, change_user_password, delete_user_account
+from datetime import datetime, timedelta
+from api.v1.services.auth import register_user, login_user, get_current_user, login_user_swagger, ENCRYPTION_KEY, update_user_profile, change_user_password, delete_user_account, create_access_token
 from api.v1.services.hedera import get_wallet_balance, decrypt_private_key
 from api.v1.schemas.user import UserCreate, Login, UserResponse, UserUpdate, PasswordChange, ForgotPasswordRequest, ResetPassword
 
@@ -27,15 +28,41 @@ async def register_user_endpoint(user: UserCreate, db: Session = Depends(get_db)
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 @auth.post("/login", response_model=dict)
-async def login_user_endpoint(login: Login, db: Session = Depends(get_db)):
+async def login_user_endpoint(login: Login, response: Response, db: Session = Depends(get_db)):
     """
-    Authenticate a user and return a JWT token.
+    Authenticate a user and return a JWT token in HttpOnly cookie.
     """
     try:
-        response = await login_user(db, login)
-        return response
+        result = await login_user(db, login, response)
+        return result
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+@auth.post("/login_swagger", response_model=dict)
+async def login_user_endpoint(
+    form_data: OAuth2PasswordRequestForm = Depends(),
+    response: Response = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Authenticate a user and return a JWT token (OAuth2 password flow).
+    """
+    try:
+        result = await login_user_swagger(db, form_data, response)
+        return result
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e))
+
+@auth.post("/logout")
+async def logout_user(response: Response):
+    """
+    Logout user by clearing the HttpOnly cookie.
+    """
+    response.delete_cookie(
+        key="token",
+        path="/"
+    )
+    return {"message": "Logged out successfully"}
 
 @auth.get("/me", response_model=UserResponse)
 async def get_current_user_endpoint(current_user: User = Depends(get_current_user)):
@@ -267,4 +294,41 @@ async def reset_password(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
+        )
+    
+@auth.post("/refresh", response_model=dict)
+async def refresh_token(
+    response: Response,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Refresh the access token.
+    """
+    try:
+        # Create new token with same user data
+        access_token_expires = timedelta(hours=24)
+        access_token = await create_access_token(
+            data={"sub": current_user.email}, expires_delta=access_token_expires
+        )
+        
+        # Set new HttpOnly cookie
+        response.set_cookie(
+            key="token",
+            value=access_token,
+            httponly=True,
+            secure=True,
+            samesite="strict",
+            max_age=60 * 60 * 24,
+            path="/"
+        )
+        
+        return {
+            "access_token": access_token,  # Still return for flexibility
+            "token_type": "bearer"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not refresh token"
         )
