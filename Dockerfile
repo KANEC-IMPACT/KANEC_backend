@@ -1,5 +1,5 @@
 # Use an official Python runtime as the base image
-FROM python:3.12-alpine
+FROM python:3.12-slim
 
 # Set environment variables
 ENV PYTHONDONTWRITEBYTECODE=1
@@ -9,7 +9,9 @@ ENV PYTHONPATH=/app
 WORKDIR /app
 
 # Install system dependencies
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 #copy the requirements.txt file and install with pip
 COPY ./requirements.txt /app/requirements.txt
