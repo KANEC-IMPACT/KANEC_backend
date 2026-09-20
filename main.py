@@ -27,3 +27,7 @@ app.include_router(api_version_one)
 @app.get("/")
 def healthcheck():
     return {"status": "ok"}
+
+@app.get("/health")
+def healthcheck():
+    return {"status": "ok"}
